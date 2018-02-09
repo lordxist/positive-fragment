@@ -76,9 +76,15 @@
                      (list (cmd-start cmd-element ...) ...))]))))
 
 (define-for-syntax command-def
-  #`(define-syntax (cmd stx)
-      (syntax-case stx ()
-        [(_ cont val) #''()])))
+  #`(...(define-syntax (cmd stx)
+          (syntax-case stx ()
+            [(_ (cont-start cont-element ...) (val-start val-element ...))
+             (and
+              (string=? (symbol->string (syntax->datum #'cont-start)) "lambda")
+              (not (string-prefix? (symbol->string (syntax->datum #'val-start)) "p-"))
+              (not (string=? (symbol->string (syntax->datum #'val-start)) "lambda"))
+              (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd")))
+             #'(list (cont-start cont-element ...) (val-start val-element ...))]))))
 
 (define-for-syntax variable-def
   #`(define-syntax (var stx)
