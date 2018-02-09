@@ -15,3 +15,5 @@
 (p-pair #s(prod-bool) ((p-var #s(bool) () ()) (p-var #s(bool) () ())) ())
 
 (p-pair #s(prod-bool) ((p-true #s(bool) () ()) (p-var #s(bool) () ())) ())
+
+(lambda #(bool) (((p-true #s(bool) () ()) (cmd () ()))))
