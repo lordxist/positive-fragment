@@ -80,7 +80,9 @@
           (syntax-case stx ()
             [(_ (cont-start cont-element ...) (val-start val-element ...))
              (and
-              (string=? (symbol->string (syntax->datum #'cont-start)) "lambda")
+              (or
+               (string=? (symbol->string (syntax->datum #'cont-start)) "lambda")
+               (string=? (symbol->string (syntax->datum #'cont-start)) "var"))
               (not (string-prefix? (symbol->string (syntax->datum #'val-start)) "p-"))
               (not (string=? (symbol->string (syntax->datum #'val-start)) "lambda"))
               (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd")))
