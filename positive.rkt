@@ -66,17 +66,20 @@
 (define-for-syntax continuation-def
   #`(...(define-syntax (lambda stx)
           (syntax-case stx ()
-            [(_ type (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...))
+            [(_ type (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
+                      (fall-through-cmd-start fall-through-cmd-element ...)))
              (and
               (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) "p-"))
                       (syntax->list #'(pattern-start ...)))
               (andmap (λ (s) (string=? (symbol->string (syntax->datum s)) "cmd"))
                       (syntax->list #'(cmd-start ...)))
+              (string=? (symbol->string (syntax->datum #'fall-through-cmd-start)) "cmd")
               (andmap (λ (s) (symbol=? (prefab-struct-key (syntax->datum #'type))
                                        (prefab-struct-key (syntax->datum s))))
                       (syntax->list #'(pattern-type ...))))
              #'(list (list (pattern-start pattern-type pattern-element ...) ...)
-                     (list (cmd-start cmd-element ...) ...))]))))
+                     (list (cmd-start cmd-element ...) ...
+                           (fall-through-cmd-start fall-through-cmd-element ...)))]))))
 
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
