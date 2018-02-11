@@ -36,22 +36,50 @@
                (map
                 (λ (n) (datum->syntax #f (string->symbol (string-append "cargs" (~a n)))))
                 (range (length (syntax->list #'(cnt-type ...)))))])
-          #`(begin
-              (define-syntax
-                (#,(if prefix
-                       (datum->syntax #f (string->symbol (string-append prefix "-" (symbol->string (syntax->datum #'con)))))
-                       #'con)
-                 stx)
-                (syntax-case stx ()
-                  [(_ #,(make-prefab-struct (syntax->datum #'tname)) (#,@args) (#,@cargs))
-                   (andmap (λ (s) (and
-                                   (not (string=? (symbol->string (syntax->datum s)) #,excluded))
-                                   (if #,prefix
-                                       (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-"))
-                                       (not (string-contains? (symbol->string (syntax->datum s)) "-")))))
-                           (syntax->list #'(#,@argheads)))
-                   #'`(#,@(map (λ (s) #`,#,s) args) #,@(map (λ (s) #`,#,s) cargs))]))
-              #,(constructor-defs-for-type r excluded prefix)))])]))
+          #`(...
+             (begin
+               #,(unless prefix
+                   #`(...
+                      (define-syntax (con stx)
+                        (syntax-case stx ()
+                          [(_ type2 elem ...)
+                           #'(#,(string->symbol (string-append "i-" (symbol->string (syntax->datum #'con))))
+                              type2 () elem ...)]))))
+               (define-syntax
+                 (#,(if prefix
+                        (datum->syntax #f (string->symbol (string-append prefix "-" (symbol->string (syntax->datum #'con)))))
+                        (datum->syntax #f (string->symbol (string-append "i-" (symbol->string (syntax->datum #'con))))))
+                  stx)
+                 #,(if prefix
+                       #`
+                       (syntax-case stx ()
+                         [(_ #,(make-prefab-struct (syntax->datum #'tname))
+                             (#,@args) (#,@cargs))
+                          (andmap (λ (s)
+                                    (and
+                                     (not (string=? (symbol->string (syntax->datum s)) #,excluded))
+                                     (if #,prefix
+                                         (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-"))
+                                         (not (string-contains? (symbol->string (syntax->datum s)) "-")))))
+                                  (syntax->list #'(#,@argheads)))
+                          #'`(#,@(map (λ (s) #`,#,s) args)
+                              #,@(map (λ (s) #`,#,s) cargs)
+                              )])
+                       #`
+                       (syntax-case stx ()
+                         [(_ #,(make-prefab-struct (syntax->datum #'tname))
+                             #,#'(... ((type-key binder-index) ...))
+                             (#,@args) (#,@cargs))
+                          (andmap (λ (s)
+                                    (and
+                                     (not (string=? (symbol->string (syntax->datum s)) #,excluded))
+                                     (if #,prefix
+                                         (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-"))
+                                         (not (string-contains? (symbol->string (syntax->datum s)) "-")))))
+                                  (syntax->list #'(#,@argheads)))
+                          #'`(#,@(map (λ (s) #`,#,s) args)
+                              #,@(map (λ (s) #`,#,s) cargs))])))
+             #,(constructor-defs-for-type r excluded prefix))))])]))
 
 (define-for-syntax (constructor-defs l excluded prefix)
   (match l
@@ -66,8 +94,15 @@
 (define-for-syntax continuation-def
   #`(...(define-syntax (lambda stx)
           (syntax-case stx ()
-            [(_ type (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
-                      (fall-through-cmd-start fall-through-cmd-element ...)))
+            [(_ type elem ...) #'(i-lambda type () elem ...)]))))
+
+(define-for-syntax i-continuation-def
+  #`(...(define-syntax (i-lambda stx)
+          (syntax-case stx ()
+            [(_ type
+                ((type-key binder-index) ...)
+                (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
+                 (fall-through-cmd-start fall-through-cmd-element ...)))
              (and
               (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) "p-"))
                       (syntax->list #'(pattern-start ...)))
@@ -78,13 +113,21 @@
                                        (prefab-struct-key (syntax->datum s))))
                       (syntax->list #'(pattern-type ...))))
              #'(list (list (pattern-start pattern-type pattern-element ...) ...)
-                     (list (cmd-start cmd-element ...) ...
+                     (list (i-cmd () cmd-element ...) ...
                            (fall-through-cmd-start fall-through-cmd-element ...)))]))))
 
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
           (syntax-case stx ()
-            [(_ (cont-start cont-type cont-element ...) (val-start val-type val-element ...))
+            [(_ elem ...) #'(i-cmd () elem ...)]))))
+
+(define-for-syntax i-command-def
+  #`(...(define-syntax (i-cmd stx)
+          (syntax-case stx ()
+            [(_
+              ((type-key binder-index) ...)
+              (cont-start cont-type cont-element ...)
+              (val-start val-type val-element ...))
              (and
               (or
                (string=? (symbol->string (syntax->datum #'cont-start)) "lambda")
@@ -95,7 +138,7 @@
               (symbol=? (prefab-struct-key (syntax->datum #'cont-type))
                         (prefab-struct-key (syntax->datum #'val-type))))
              #'(list (cont-start cont-type cont-element ...) (val-start val-type val-element ...))]
-            [(_ 'daemon name ((arg-start arg-element ...) ...))
+            [(_ _ 'daemon name ((arg-start arg-element ...) ...))
              (and
               (string? (syntax->datum #'name))
               (andmap
@@ -129,7 +172,9 @@
            #,(linear-dependencies slist) ; disables recursive types
            #,(constructor-defs slist "lvar" #f)
            #,continuation-def
+           #,i-continuation-def ; internal representation
            #,command-def
+           #,i-command-def ; internal representation
            #,variable-def
            #,p-variable-def ; for variables in patterns (linear)
            #,(constructor-defs slist "var" "p")))])) ; for patterns
