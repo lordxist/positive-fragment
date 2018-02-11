@@ -94,7 +94,17 @@
               (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd"))
               (symbol=? (prefab-struct-key (syntax->datum #'cont-type))
                         (prefab-struct-key (syntax->datum #'val-type))))
-             #'(list (cont-start cont-type cont-element ...) (val-start val-type val-element ...))]))))
+             #'(list (cont-start cont-type cont-element ...) (val-start val-type val-element ...))]
+            [(_ 'daemon name ((arg-start arg-element ...) ...))
+             (and
+              (string? (syntax->datum #'name))
+              (andmap
+               (λ (s) (and
+                       (not (string-prefix? (symbol->string (syntax->datum s)) "p-"))
+                       (not (string=? (symbol->string (syntax->datum s)) "lambda"))
+                       (not (string=? (symbol->string (syntax->datum s)) "cmd"))))
+               (syntax->list #'(arg-start ...))))
+             #'(list (arg-start arg-element ...) ...)]))))
 
 (define-for-syntax variable-def
   #`(define-syntax (var stx)

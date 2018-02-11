@@ -24,3 +24,5 @@
                   (cmd (var #s(bool) 0 ()) (true #s(bool) () ()))))
 
 (cmd (var #s(bool) 0 ()) (true #s(bool) () ()))
+
+(lambda #s(bool) ((cmd 'daemon "print" ((var #s(bool) 0 ())))))
