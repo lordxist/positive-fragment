@@ -58,9 +58,7 @@
                           (andmap (λ (s)
                                     (and
                                      (not (string=? (symbol->string (syntax->datum s)) #,excluded))
-                                     (if #,prefix
-                                         (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-"))
-                                         (not (string-contains? (symbol->string (syntax->datum s)) "-")))))
+                                     (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-"))))
                                   (syntax->list #'(#,@argheads)))
                           #'`(#,@(map (λ (s) #`,#,s) args)
                               #,@(map (λ (s) #`,#,s) cargs)
@@ -73,9 +71,7 @@
                           (andmap (λ (s)
                                     (and
                                      (not (string=? (symbol->string (syntax->datum s)) #,excluded))
-                                     (if #,prefix
-                                         (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-"))
-                                         (not (string-contains? (symbol->string (syntax->datum s)) "-")))))
+                                     (not (string-contains? (symbol->string (syntax->datum s)) "-"))))
                                   (syntax->list #'(#,@argheads)))
                           #'`(#,@(map (λ (s) #`,#,s) args)
                               #,@(map (λ (s) #`,#,s) cargs))])))
