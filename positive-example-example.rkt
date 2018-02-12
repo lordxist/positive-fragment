@@ -26,3 +26,9 @@
 (cmd (var #s(bool) 0 ()) (true #s(bool) () ()))
 
 (lambda #s(bool) ((cmd 'daemon "print" ((var #s(bool) 0 ())))))
+
+(lambda #s(bool) (((p-var #s(bool) () ()) (cmd (lambda #s(bool)
+                                                 (((p-var #s(bool) () ()) (cmd 'daemon "print" ((var #s(bool) 1 ()))))
+                                                  (cmd (var #s(bool) 0 ()) (true #s(bool) () ()))))
+                                               (var #s(bool) 0 ())))
+                  (cmd (var #s(bool) 0 ()) (true #s(bool) () ()))))

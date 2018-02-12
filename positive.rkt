@@ -94,7 +94,7 @@
 (define-for-syntax continuation-def
   #`(...(define-syntax (lambda stx)
           (syntax-case stx ()
-            [(_ type elem ...) #'(i-lambda type () elem ...)]))))
+            [(_ type elem ...) #'(i-lambda type ((#s(bool) 0)) elem ...)]))))
 
 (define-for-syntax i-continuation-def
   #`(...(define-syntax (i-lambda stx)
@@ -112,9 +112,32 @@
               (andmap (λ (s) (symbol=? (prefab-struct-key (syntax->datum #'type))
                                        (prefab-struct-key (syntax->datum s))))
                       (syntax->list #'(pattern-type ...))))
-             #'(list (list (pattern-start pattern-type pattern-element ...) ...)
-                     (list (i-cmd () cmd-element ...) ...
-                           (fall-through-cmd-start fall-through-cmd-element ...)))]))))
+             (letrec
+                 ([num-bound
+                   (λ (p)
+                     (syntax-case p ()
+                       [(p-start #s(bool) () ()) (symbol=? (syntax->datum #'p-start) 'p-var) 1]
+                       [(p-start #s(bool) l1 l2) (+ (foldl + 0 (map num-bound (syntax->list #'l1)))
+                                                    (foldl + 0 (map num-bound (syntax->list #'l2))))]))]
+                  [updated-bounds
+                   (map
+                    (λ (p c)
+                      #`(i-cmd
+                         (#,@(map
+                              (λ (s)
+                                (syntax-case s ()
+                                  [(#s(bool) binder-index2)
+                                   #`(#s(bool) #,(datum->syntax #f (+ (syntax->datum #'binder-index2) (num-bound p))))]
+                                  [(type-key2 binder-index2) #'(type-key2 binder-index2)]))
+                              (syntax->list #'((type-key binder-index) ...))))
+                         #,@(syntax->list
+                             (syntax-case c ()
+                               [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))
+                    (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
+                    (syntax->list #'((cmd-start cmd-element ...) ...)))])
+               #`(list (list (pattern-start pattern-type pattern-element ...) ...)
+                       (list #,@updated-bounds
+                             (fall-through-cmd-start fall-through-cmd-element ...))))]))))
 
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
