@@ -73,8 +73,17 @@
                                      (not (string=? (symbol->string (syntax->datum s)) #,excluded))
                                      (not (string-contains? (symbol->string (syntax->datum s)) "-"))))
                                   (syntax->list #'(#,@argheads)))
-                          #'`(#,@(map (λ (s) #`,#,s) args)
-                              #,@(map (λ (s) #`,#,s) cargs))])))
+                          (let ([i-args
+                                 (map
+                                  (λ (s)
+                                    (syntax-case s ()
+                                      #,#'(...
+                                           [(sub type2 elem ...)
+                                            #`(#,(datum->syntax s (string->symbol (string-append "i-" (symbol->string (syntax->datum #'sub)))))
+                                               type2 () elem ...)])))
+                                  (syntax->list #'(#,@args)))])
+                            #`(list #,@i-args
+                                    #,@(syntax->list #'(#,@cargs))))])))
              #,(constructor-defs-for-type r excluded prefix))))])]))
 
 (define-for-syntax (constructor-defs l excluded prefix)
@@ -123,7 +132,7 @@
                               (λ (s)
                                 (syntax-case s ()
                                   [(#s(bool) binder-index2)
-                                   #`(#s(bool) #,(datum->syntax #f (+ (syntax->datum #'binder-index2) (num-bound p))))]
+                                   #`(#s(bool) #,(datum->syntax s (+ (syntax->datum #'binder-index2) (num-bound p))))]
                                   [(type-key2 binder-index2) #'(type-key2 binder-index2)]))
                               (syntax->list #'((type-key binder-index) ...))))
                          #,@(syntax->list
@@ -156,7 +165,11 @@
               (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd"))
               (symbol=? (prefab-struct-key (syntax->datum #'cont-type))
                         (prefab-struct-key (syntax->datum #'val-type))))
-             #'(list (cont-start cont-type cont-element ...) (val-start val-type val-element ...))]
+             #`(list (#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
+                      cont-type
+                      ((type-key binder-index) ...)
+                      cont-element ...)
+                     (val-start val-type val-element ...))]
             [(_ _ 'daemon name ((arg-start arg-element ...) ...))
              (and
               (string? (syntax->datum #'name))
@@ -173,7 +186,14 @@
       (syntax-case stx ()
         [(_ type n ())
          (number? (syntax->datum #'n))
-         #''()])))
+         #'(i-var type ((#s(bool) 0)) n ())])))
+
+(define-for-syntax i-variable-def
+  #`(...(define-syntax (i-var stx)
+          (syntax-case stx ()
+            [(_ type ((type-key binder-index) ...) n ())
+             (number? (syntax->datum #'n))
+             #''()]))))
 
 (define-for-syntax p-variable-def
   #`(define-syntax (p-var stx)
@@ -195,5 +215,6 @@
            #,command-def
            #,i-command-def ; internal representation
            #,variable-def
+           #,i-variable-def ; internal representation (not strictly necessary, just to avoid a special case for the other grammar constructs)
            #,p-variable-def ; for variables in patterns (linear)
            #,(constructor-defs slist "var" "p")))])) ; for patterns
