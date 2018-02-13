@@ -120,8 +120,7 @@
                    (λ (p)
                      (syntax-case p ()
                        [(p-start #s(bool) () ()) (symbol=? (syntax->datum #'p-start) 'p-var) 1]
-                       [(p-start #s(bool) l1 l2) (+ (foldl + 0 (map new-bound (syntax->list #'l1)))
-                                                    (foldl + 0 (map new-bound (syntax->list #'l2))))]))]
+                       [(p-start #s(bool) pl nl) (+ (foldl + 0 (map new-bound (syntax->list #'pl))))]))]
                   [all-bound
                    (λ (p)
                      (+ prev-bound (new-bound p)))]
