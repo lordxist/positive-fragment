@@ -240,7 +240,7 @@
        #`(begin
            (provide #%module-begin #%app lambda cmd var p-var con ... ... #,@pcons)
            #,(linear-dependencies slist) ; disables recursive types
-           #,(constructor-defs slist "lvar" #f)
+           #,(constructor-defs slist "var" #f)
            #,continuation-def
            #,i-continuation-def ; internal representation
            #,command-def
