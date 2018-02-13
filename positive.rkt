@@ -16,7 +16,7 @@
        [(name ((con (type ...) (cnt-type ...)) ...))
         #``(,type ... ... ,cnt-type ... ... ,(λ (name) #,(linear-dependencies r)))])]))
 
-(define-for-syntax (constructor-defs-for-type l excluded prefix)
+(define-for-syntax (constructor-defs-for-type l prefix)
   (match l
     ['() #''()]
     [(cons x r)
@@ -55,10 +55,7 @@
                        (syntax-case stx ()
                          [(_ #,(make-prefab-struct (syntax->datum #'tname))
                              (#,@args) (#,@cargs))
-                          (andmap (λ (s)
-                                    (and
-                                     (not (string=? (symbol->string (syntax->datum s)) #,excluded))
-                                     (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-"))))
+                          (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-")))
                                   (syntax->list #'(#,@argheads)))
                           #'`(#,@(map (λ (s) #`,#,s) args)
                               #,@(map (λ (s) #`,#,s) cargs)
@@ -68,10 +65,7 @@
                          [(_ #,(make-prefab-struct (syntax->datum #'tname))
                              #,#'(... ((type-key binder-index) ...))
                              (#,@args) (#,@cargs))
-                          (andmap (λ (s)
-                                    (and
-                                     (not (string=? (symbol->string (syntax->datum s)) #,excluded))
-                                     (not (string-contains? (symbol->string (syntax->datum s)) "-"))))
+                          (andmap (λ (s) (not (string-contains? (symbol->string (syntax->datum s)) "-")))
                                   (syntax->list #'(#,@argheads)))
                           (let ([i-args
                                  (map
@@ -84,17 +78,17 @@
                                   (syntax->list #'(#,@args)))])
                             #`(list #,@i-args
                                     #,@(syntax->list #'(#,@cargs))))])))
-             #,(constructor-defs-for-type r excluded prefix))))])]))
+             #,(constructor-defs-for-type r prefix))))])]))
 
-(define-for-syntax (constructor-defs l excluded prefix)
+(define-for-syntax (constructor-defs l prefix)
   (match l
     ['() #''()]
     [(cons x r)
      (syntax-case x ()
        [(name ((con (type ...) (cnt-type ...)) ...))
         #`(begin
-            #,(constructor-defs-for-type (syntax->list #'((con name (type ...) (cnt-type ...)) ...)) excluded prefix)
-            #,(constructor-defs r excluded prefix))])]))
+            #,(constructor-defs-for-type (syntax->list #'((con name (type ...) (cnt-type ...)) ...)) prefix)
+            #,(constructor-defs r prefix))])]))
 
 (define-for-syntax continuation-def
   #`(...(define-syntax (lambda stx)
@@ -240,7 +234,7 @@
        #`(begin
            (provide #%module-begin #%app lambda cmd var p-var con ... ... #,@pcons)
            #,(linear-dependencies slist) ; disables recursive types
-           #,(constructor-defs slist "var" #f)
+           #,(constructor-defs slist #f)
            #,continuation-def
            #,i-continuation-def ; internal representation
            #,command-def
@@ -248,4 +242,4 @@
            #,variable-def
            #,i-variable-def ; internal representation (not strictly necessary, just to avoid a special case for the other grammar constructs)
            #,p-variable-def ; for variables in patterns (linear)
-           #,(constructor-defs slist "var" "p")))])) ; for patterns
+           #,(constructor-defs slist "p")))])) ; for patterns
