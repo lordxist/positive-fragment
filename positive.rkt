@@ -99,13 +99,13 @@
 (define-for-syntax continuation-def
   #`(...(define-syntax (lambda stx)
           (syntax-case stx ()
-            [(_ type elem ...) #'(i-lambda type ((#s(bool) 0)) elem ...)]))))
+            [(_ type elem ...) #'(i-lambda type () elem ...)]))))
 
 (define-for-syntax i-continuation-def
   #`(...(define-syntax (i-lambda stx)
           (syntax-case stx ()
             [(_ type
-                ((type-key binder-index) ...)
+                (bound-var ...)
                 (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
                  (fall-through-cmd-start fall-through-cmd-element ...)))
              (and
@@ -118,31 +118,50 @@
                                        (prefab-struct-key (syntax->datum s))))
                       (syntax->list #'(pattern-type ...))))
              (letrec
-                 ([num-bound
+                 ([prev-bound
+                   (if (empty? (syntax->list #'(bound-var ...)))
+                       -1
+                       (string->number (last (string-split (symbol->string (syntax->datum (last (syntax->list #'(bound-var ...))))) "-"))))]
+                  [new-bound
                    (λ (p)
                      (syntax-case p ()
                        [(p-start #s(bool) () ()) (symbol=? (syntax->datum #'p-start) 'p-var) 1]
-                       [(p-start #s(bool) l1 l2) (+ (foldl + 0 (map num-bound (syntax->list #'l1)))
-                                                    (foldl + 0 (map num-bound (syntax->list #'l2))))]))]
+                       [(p-start #s(bool) l1 l2) (+ (foldl + 0 (map new-bound (syntax->list #'l1)))
+                                                    (foldl + 0 (map new-bound (syntax->list #'l2))))]))]
+                  [all-bound
+                   (λ (p)
+                     (+ prev-bound (new-bound p)))]
+                  [new-bound-vars
+                   (λ (p c)
+                     (map (λ (n) (datum->syntax c (string->symbol (string-append "bool-" (number->string n)))))
+                          (range (+ prev-bound 1) (+ (all-bound p) 1))))]
+                  [all-bound-vars
+                   (λ (p c)
+                     (append (syntax->list #'(bound-var ...))
+                             (new-bound-vars p c)))]
                   [updated-bounds
-                   (map
-                    (λ (p c)
-                      #`(i-cmd
-                         (#,@(map
-                              (λ (s)
-                                (syntax-case s ()
-                                  [(#s(bool) binder-index2)
-                                   #`(#s(bool) #,(datum->syntax s (+ (syntax->datum #'binder-index2) (num-bound p))))]
-                                  [(type-key2 binder-index2) #'(type-key2 binder-index2)]))
-                              (syntax->list #'((type-key binder-index) ...))))
-                         #,@(syntax->list
-                             (syntax-case c ()
-                               [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))
-                    (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
-                    (syntax->list #'((cmd-start cmd-element ...) ...)))])
-               #`(list (list (pattern-start pattern-type pattern-element ...) ...)
-                       (list #,@updated-bounds
-                             (fall-through-cmd-start fall-through-cmd-element ...))))]))))
+                   (λ (p c)
+                     #`(i-cmd
+                        (#,@(all-bound-vars p c))
+                        #,@(syntax->list
+                            (syntax-case c ()
+                              [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))]
+                  [updated-bounds-all
+                   (map updated-bounds
+                        (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
+                        (syntax->list #'((cmd-start cmd-element ...) ...)))]
+                  [binding-check
+                   (λ (p c)
+                     #`(λ (#,@(new-bound-vars p c)) #,(updated-bounds p c)))]
+                  [binding-check-all
+                   (map binding-check
+                        (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
+                        (syntax->list #'((cmd-start cmd-element ...) ...)))])
+               ;#`(list (list (pattern-start pattern-type pattern-element ...) ...)
+               ;        (list #,@binding-check-all
+               ;              (fall-through-cmd-start fall-through-cmd-element ...)))
+               #``(#,@(map (λ (s) #`,#,s) binding-check-all))
+               )]))))
 
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
@@ -153,7 +172,7 @@
   #`(...(define-syntax (i-cmd stx)
           (syntax-case stx ()
             [(_
-              ((type-key binder-index) ...)
+              (bound-var ...)
               (cont-start cont-type cont-element ...)
               (val-start val-type val-element ...))
              (and
@@ -165,12 +184,15 @@
               (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd"))
               (symbol=? (prefab-struct-key (syntax->datum #'cont-type))
                         (prefab-struct-key (syntax->datum #'val-type))))
-             #`(list (#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
-                      cont-type
-                      ((type-key binder-index) ...)
-                      cont-element ...)
-                     (val-start val-type val-element ...))]
-            [(_ _ 'daemon name ((arg-start arg-element ...) ...))
+             #``(,(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
+                   cont-type
+                   (bound-var ...)
+                   cont-element ...)
+                 ,(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'val-start)))))
+                   val-type
+                   (bound-var ...)
+                   val-element ...))]
+            [(_ (bound-var ...) 'daemon name ((arg-start arg-type arg-element ...) ...))
              (and
               (string? (syntax->datum #'name))
               (andmap
@@ -179,21 +201,30 @@
                        (not (string=? (symbol->string (syntax->datum s)) "lambda"))
                        (not (string=? (symbol->string (syntax->datum s)) "cmd"))))
                (syntax->list #'(arg-start ...))))
-             #'(list (arg-start arg-element ...) ...)]))))
+             #`(list
+                #,@(map (λ (s)
+                          (syntax-case s ()
+                            [(arg-start2 arg-type2 (bound-var2 ...) arg-element2 ...)
+                             #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'arg-start2)))))
+                                arg-type2 (bound-var2 ...) arg-element2 ...)]))
+                        (syntax->list
+                         #'((arg-start arg-type (bound-var ...) arg-element ...) ...))))]))))
 
 (define-for-syntax variable-def
   #`(define-syntax (var stx)
       (syntax-case stx ()
         [(_ type n ())
          (number? (syntax->datum #'n))
-         #'(i-var type ((#s(bool) 0)) n ())])))
+         #'(i-var type () n ())])))
 
 (define-for-syntax i-variable-def
   #`(...(define-syntax (i-var stx)
           (syntax-case stx ()
-            [(_ type ((type-key binder-index) ...) n ())
+            [(_ type (bound-var ...) n ())
              (number? (syntax->datum #'n))
-             #''()]))))
+             (if (> (syntax->datum #'n) (- (length (syntax->list #'(bound-var ...))) 1))
+                 #'unbound
+                 (list-ref (syntax->list #'(bound-var ...)) (syntax->datum #'n)))]))))
 
 (define-for-syntax p-variable-def
   #`(define-syntax (p-var stx)
