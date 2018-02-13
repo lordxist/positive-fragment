@@ -34,8 +34,11 @@
                     (syntax->list #'(type ...)))]
               [cargs
                (map
-                (λ (n) (datum->syntax #f (string->symbol (string-append "cargs" (~a n)))))
-                (range (length (syntax->list #'(cnt-type ...)))))])
+                (λ (n s) #`(...(#,(datum->syntax #f (string->symbol (string-append "cstart" (~a n))))
+                                #,(make-prefab-struct (syntax->datum s))
+                                #,(datum->syntax #f (string->symbol (string-append "celem" (~a n)))) ...)))
+                (range (length (syntax->list #'(cnt-type ...))))
+                (syntax->list #'(cnt-type ...)))])
           #`(...
              (begin
                #,(unless prefix
