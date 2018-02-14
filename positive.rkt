@@ -32,6 +32,9 @@
                                 #,(datum->syntax #f (string->symbol (string-append "scargs" (~a n))))))
                     (range (length (syntax->list #'(type ...))))
                     (syntax->list #'(type ...)))]
+              [cargheads
+               (map (λ (n) (datum->syntax #f (string->symbol (string-append "cstart" (~a n)))))
+                    (range (length (syntax->list #'(cnt-type ...)))))]
               [cargs
                (map
                 (λ (n s) #`(...(#,(datum->syntax #f (string->symbol (string-append "cstart" (~a n))))
@@ -58,29 +61,42 @@
                        (syntax-case stx ()
                          [(_ #,(make-prefab-struct (syntax->datum #'tname))
                              (#,@args) (#,@cargs))
-                          (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-")))
+                          (and
+                           (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-")))
                                   (syntax->list #'(#,@argheads)))
+                           (andmap (λ (s)
+                                     (let ([name (symbol->string (syntax->datum s))])
+                                       (or (string=? "lambda" name) (string=? (string-append #,prefix "-var") name))))
+                                   (syntax->list #'(#,@cargheads))))
                           #'`(#,@(map (λ (s) #`,#,s) args)
                               #,@(map (λ (s) #`,#,s) cargs)
                               )])
                        #`
                        (syntax-case stx ()
                          [(_ #,(make-prefab-struct (syntax->datum #'tname))
-                             #,#'(... ((type-key binder-index) ...))
+                             #,#'(...(bound-var ...))
                              (#,@args) (#,@cargs))
-                          (andmap (λ (s) (not (string-contains? (symbol->string (syntax->datum s)) "-")))
-                                  (syntax->list #'(#,@argheads)))
+                          (and
+                           (andmap (λ (s) (and
+                                           (not (string-contains? (symbol->string (syntax->datum s)) "-"))
+                                           (not (string=? "lambda" (symbol->string (syntax->datum s))))
+                                           (not (string=? "cmd" (symbol->string (syntax->datum s))))))
+                                   (syntax->list #'(#,@argheads)))
+                           (andmap (λ (s) (let ([name (symbol->string (syntax->datum s))])
+                                       (or (string=? "lambda" name) (string=? "var" name))))
+                                   (syntax->list #'(#,@cargheads))))
                           (let ([i-args
-                                 (map
-                                  (λ (s)
-                                    (syntax-case s ()
-                                      #,#'(...
-                                           [(sub type2 elem ...)
-                                            #`(#,(datum->syntax s (string->symbol (string-append "i-" (symbol->string (syntax->datum #'sub)))))
-                                               type2 () elem ...)])))
-                                  (syntax->list #'(#,@args)))])
-                            #`(list #,@i-args
-                                    #,@(syntax->list #'(#,@cargs))))])))
+                                 (λ (arglist)
+                                   (map
+                                    (λ (s)
+                                      (syntax-case s ()
+                                        #,#'(...
+                                             [(sub type2 elem ...)
+                                              #`(#,(datum->syntax s (string->symbol (string-append "i-" (symbol->string (syntax->datum #'sub)))))
+                                                 type2 (bound-var ...) elem ...)])))
+                                    arglist))])
+                            #`(list (list #,@(i-args (syntax->list #'(#,@args))))
+                                    (list #,@(i-args (syntax->list #'(#,@cargs))))))])))
              #,(constructor-defs-for-type r prefix))))])]))
 
 (define-for-syntax (constructor-defs l prefix)
