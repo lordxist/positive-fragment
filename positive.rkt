@@ -134,43 +134,44 @@
                       (syntax->list #'(pattern-type ...))))
              (letrec
                  ([prev-bound
-                   (if (empty? (syntax->list #'(bound-var ...)))
-                       -1
-                       (string->number (last (string-split (symbol->string (syntax->datum (last (syntax->list #'(bound-var ...))))) "-"))))]
+                   (λ (t)
+                     (let ([prev-bound-vars-t
+                            (filter (λ (s)
+                                      (syntax-case s ()
+                                        [(p-start p-type _ _) (symbol=? t (prefab-struct-key (syntax->datum s)))]))
+                                    (syntax->list #'(bound-var ...)))])
+                       (if (empty? (syntax->list #'(bound-var ...)))
+                           -1
+                           (string->number (last (string-split (symbol->string (syntax->datum (last prev-bound-vars-t))) "-"))))))]
                   [new-bound
-                   (λ (p)
+                   (λ (t p)
                      (syntax-case p ()
-                       [(p-start #s(bool) () ()) (symbol=? (syntax->datum #'p-start) 'p-var) 1]
-                       [(p-start p-type pl nl) (+ (foldl + 0 (map new-bound (syntax->list #'pl))))]))]
+                       [(p-start p-type () ())
+                        (and (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
+                             (symbol=? (syntax->datum #'p-start) 'p-var))
+                        1]
+                       [(p-start p-type pl nl) (+ (foldl + 0 (map ((curry new-bound) t) (syntax->list #'pl))))]))]
                   [all-bound
-                   (λ (p)
-                     (+ prev-bound (new-bound p)))]
+                   (λ (t p)
+                     (+ (prev-bound t) (new-bound t p)))]
                   [new-bound-vars
-                   (λ (p c)
+                   (λ (t p c)
                      (map (λ (n) (datum->syntax c (string->symbol (string-append "bool-" (number->string n)))))
-                          (range (+ prev-bound 1) (+ (all-bound p) 1))))]
+                          (range (+ (prev-bound t) 1) (+ (all-bound t p) 1))))]
                   [all-bound-vars
-                   (λ (p c)
+                   (λ (t p c)
                      (append (syntax->list #'(bound-var ...))
-                             (new-bound-vars p c)))]
+                             (new-bound-vars t p c)))]
                   [updated-bounds
-                   (λ (p c)
+                   (λ (t p c)
                      #`(i-cmd
-                        (#,@(all-bound-vars p c))
+                        (#,@(all-bound-vars t p c))
                         #,@(syntax->list
                             (syntax-case c ()
                               [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))]
-                  [updated-bounds-all
-                   (map updated-bounds
-                        (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
-                        (syntax->list #'((cmd-start cmd-element ...) ...)))]
                   [binding-check
-                   (λ (p c)
-                     #`(λ (#,@(new-bound-vars p c)) #,(updated-bounds p c)))]
-                  [binding-check-all
-                   (map binding-check
-                        (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
-                        (syntax->list #'((cmd-start cmd-element ...) ...)))]
+                   (λ (t p c)
+                     #`(λ (#,@(new-bound-vars t p c)) #,(updated-bounds t p c)))]
                   [nvar (make-hash)]
                   [match-vars (make-hash)]
                   [structify
@@ -198,14 +199,11 @@
                   [match-case
                    #`(match case
                        #,@(map (λ (p c) #`[#,(structify p p)
-                                           (#,(binding-check p c)
+                                           (#,(binding-check 'bool p c)
                                             #,@(reverse (hash-ref match-vars p)))])
                                (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
                                (syntax->list #'((cmd-start cmd-element ...) ...)))
                        [_ '()])])
-               ;#`(list (list (pattern-start pattern-type pattern-element ...) ...)
-               ;        (list #,@binding-check-all
-               ;              (fall-through-cmd-start fall-through-cmd-element ...)))
                #`(λ (case) (list #,match-case (list (pattern-start pattern-type pattern-element ...) ...))))]))))
 
 (define-for-syntax command-def
