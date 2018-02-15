@@ -155,23 +155,30 @@
                    (λ (t p)
                      (+ (prev-bound t) (new-bound t p)))]
                   [new-bound-vars
-                   (λ (t p c)
+                   (λ (p c t)
                      (map (λ (n) (datum->syntax c (string->symbol (string-append "bool-" (number->string n)))))
                           (range (+ (prev-bound t) 1) (+ (all-bound t p) 1))))]
                   [all-bound-vars
-                   (λ (t p c)
+                   (λ (p c t)
                      (append (syntax->list #'(bound-var ...))
-                             (new-bound-vars t p c)))]
+                             (new-bound-vars p c t)))]
+                  [bound-var-types
+                   (sort
+                    (remove-duplicates
+                     (map (λ (s) (syntax-case s ()
+                                   [(p-start p-type _ _) (prefab-struct-key (syntax->datum #'p-type))]))
+                          (syntax->list #'(bound-var ...))))
+                    symbol<?)]
                   [updated-bounds
-                   (λ (t p c)
+                   (λ (p c)
                      #`(i-cmd
-                        (#,@(all-bound-vars t p c))
+                        (#,@(append-map (((curry all-bound-vars) p) c) bound-var-types))
                         #,@(syntax->list
                             (syntax-case c ()
                               [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))]
                   [binding-check
-                   (λ (t p c)
-                     #`(λ (#,@(new-bound-vars t p c)) #,(updated-bounds t p c)))]
+                   (λ (p c)
+                     #`(λ (#,@(append-map (((curry new-bound-vars) p) c) bound-var-types)) #,(updated-bounds p c)))]
                   [nvar (make-hash)]
                   [match-vars (make-hash)]
                   [structify
@@ -199,7 +206,7 @@
                   [match-case
                    #`(match case
                        #,@(map (λ (p c) #`[#,(structify p p)
-                                           (#,(binding-check 'bool p c)
+                                           (#,(binding-check p c)
                                             #,@(reverse (hash-ref match-vars p)))])
                                (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
                                (syntax->list #'((cmd-start cmd-element ...) ...)))
