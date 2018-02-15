@@ -138,7 +138,7 @@
                      (let ([prev-bound-vars-t
                             (filter (λ (s)
                                       (syntax-case s ()
-                                        [(p-start p-type _ _) (symbol=? t (prefab-struct-key (syntax->datum s)))]))
+                                        [(p-start p-type _ _) (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))]))
                                     (syntax->list #'(bound-var ...)))])
                        (if (empty? (syntax->list #'(bound-var ...)))
                            -1
