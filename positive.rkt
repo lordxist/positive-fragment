@@ -141,7 +141,7 @@
                    (λ (p)
                      (syntax-case p ()
                        [(p-start #s(bool) () ()) (symbol=? (syntax->datum #'p-start) 'p-var) 1]
-                       [(p-start #s(bool) pl nl) (+ (foldl + 0 (map new-bound (syntax->list #'pl))))]))]
+                       [(p-start p-type pl nl) (+ (foldl + 0 (map new-bound (syntax->list #'pl))))]))]
                   [all-bound
                    (λ (p)
                      (+ prev-bound (new-bound p)))]
@@ -174,30 +174,30 @@
                   [nvar (make-hash)]
                   [match-vars (make-hash)]
                   [structify
-                   (λ (p)
+                   (λ (global-p p)
                      (begin
-                       (unless (hash-has-key? nvar p)
+                       (unless (hash-has-key? nvar global-p)
                             (begin
-                              (hash-set! nvar p -1)
-                              (hash-set! match-vars p empty)))
+                              (hash-set! nvar global-p -1)
+                              (hash-set! match-vars global-p empty)))
                        (syntax-case p ()
                          [(p-start p-type () ())
                           (symbol=? 'p-var (syntax->datum #'p-start))
                           (begin
-                            (hash-update! nvar p ((curry +) 1))
-                            (hash-update! match-vars p
-                                          ((curry cons) (datum->syntax #'p-start (string->symbol (string-append "bool-" (number->string (hash-ref nvar p)))))))
-                            (first (hash-ref match-vars p)))]
+                            (hash-update! nvar global-p ((curry +) 1))
+                            (hash-update! match-vars global-p
+                                          ((curry cons) (datum->syntax #'p-start (string->symbol (string-append "bool-" (number->string (hash-ref nvar global-p)))))))
+                            (first (hash-ref match-vars global-p)))]
                          [(p-start p-type (p-element1 ...) (p-element2 ...))
-                          (let ([structify-result1 (map structify (syntax->list #'(p-element1 ...)))]
-                                [structify-result2 (map structify (syntax->list #'(p-element2 ...)))])
+                          (let ([structify-result1 (map ((curry structify) global-p) (syntax->list #'(p-element1 ...)))]
+                                [structify-result2 (map ((curry structify) global-p) (syntax->list #'(p-element2 ...)))])
                             #`(list
                                `#,(make-prefab-struct (string->symbol (substring (symbol->string (syntax->datum #'p-start)) 2)))
                                (list #,@structify-result1)
                                (list #,@structify-result2)))])))]
                   [match-case
                    #`(match case
-                       #,@(map (λ (p c) #`[#,(structify p)
+                       #,@(map (λ (p c) #`[#,(structify p p)
                                            (#,(binding-check p c)
                                             #,@(reverse (hash-ref match-vars p)))])
                                (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
