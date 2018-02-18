@@ -198,7 +198,10 @@
                           (begin
                             (hash-update! nvar global-p ((curry +) 1))
                             (hash-update! match-vars global-p
-                                          ((curry cons) (datum->syntax #'p-start (string->symbol (string-append "bool-" (number->string (hash-ref nvar global-p)))))))
+                                          ((curry cons) (datum->syntax #'p-start (string->symbol
+                                                                                  (string-append
+                                                                                   (symbol->string (prefab-struct-key (syntax->datum #'p-type)))
+                                                                                   "-" (number->string (hash-ref nvar global-p)))))))
                             (first (hash-ref match-vars global-p)))]
                          [(p-start p-type (p-element1 ...) (p-element2 ...))
                           (let ([structify-result1 (map ((curry structify) global-p) (syntax->list #'(p-element1 ...)))]
