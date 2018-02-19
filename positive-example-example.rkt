@@ -27,11 +27,11 @@
 
 (lambda #s(bool) ((cmd daemon #s(print) ((var #s(bool) 0 ())))))
 
-;(lambda #s(bool) (((p-var #s(bool) () ()) (cmd (lambda #s(bool)
-;                                                 (((p-var #s(bool) () ()) (cmd daemon #s(print) ((var #s(bool) 1 ()))))
-;                                                  (cmd daemon #s(print) ((var #s(bool) 0 ())))))
-;                                               (var #s(bool) 0 ())))
-;                  (cmd daemon #s(print) ((var #s(bool) 0 ())))))
+(lambda #s(bool) (((p-var #s(bool) () ()) (cmd (lambda #s(bool)
+                                                 (((p-var #s(bool) () ()) (cmd daemon #s(print) ((var #s(bool) 1 ()))))
+                                                  (cmd daemon #s(print) ((var #s(bool) 0 ())))))
+                                               (var #s(bool) 0 ())))
+                  (cmd daemon #s(print) ((var #s(bool) 0 ())))))
 
 ;(unapply #s(subtraction-bool) ((true #s(bool) () ())) ((lambda #s(bool) ((cmd daemon #s(print) ((var #s(bool) 0 ())))))))
 
