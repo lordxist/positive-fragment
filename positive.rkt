@@ -284,14 +284,14 @@
       (syntax-case stx ()
         [(_ type () ()) #''()])))
 
-(define-syntax (data stx)
+(define-for-syntax (data-helper stx)
   (syntax-case stx ()
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
      (let ([slist (syntax->list #'((name ((con (type ...) (cnt-type ...)) ...)) ...))]
            [pcons (map (λ (s) (datum->syntax #f (string->symbol (string-append "p-" (symbol->string (syntax->datum s))))))
                        (syntax->list #'(con ... ...)))])
        #`(begin
-           (provide #%module-begin #%app lambda cmd var p-var con ... ... #,@pcons)
+           (provide #%app lambda cmd var p-var con ... ... #,@pcons)
            #,(linear-dependencies slist) ; disables recursive types
            #,(constructor-defs slist #f)
            #,continuation-def
@@ -302,3 +302,12 @@
            #,i-variable-def ; internal representation (not strictly necessary, just to avoid a special case for the other grammar constructs)
            #,p-variable-def ; for variables in patterns (linear)
            #,(constructor-defs slist "p")))])) ; for patterns
+
+(define-syntax (data stx)
+  (syntax-case stx ()
+    [(data #s(preprocess) (name ((con (type ...) (cnt-type ...)) ...)) ...)
+     (data-helper #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
+    [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
+     #`(begin
+         (provide #%module-begin)
+         #,(data-helper #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...)))]))
