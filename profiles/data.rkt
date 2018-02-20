@@ -19,7 +19,7 @@
   #`(...(define-syntax (module-begin stx)
           (syntax-case stx ()
             [(_ elem ...)
-             #`(module-begin #,@(map convert-calls (syntax->list #'(elem ...))))]))))
+             #`(#%module-begin #,@(map convert-calls (syntax->list #'(elem ...))))]))))
 
 (define-syntax (data stx)
   (syntax-case stx ()
