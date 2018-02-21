@@ -275,9 +275,14 @@
           (syntax-case stx ()
             [(_ type (bound-var ...) n ())
              (number? (syntax->datum #'n))
-             (if (> (syntax->datum #'n) (- (length (syntax->list #'(bound-var ...))) 1))
-                 #'unbound
-                 (list-ref (syntax->list #'(bound-var ...)) (syntax->datum #'n)))]))))
+             (let ([vars-of-type
+                    (filter
+                     (λ (s) (symbol=? (prefab-struct-key (syntax->datum #'type))
+                                      (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
+                     (syntax->list #'(bound-var ...)))])
+               (if (> (syntax->datum #'n) (- (length vars-of-type) 1))
+                   #'unbound
+                   (list-ref vars-of-type (syntax->datum #'n))))]))))
 
 (define-for-syntax p-variable-def
   #`(define-syntax (p-var stx)
