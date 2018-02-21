@@ -7,13 +7,14 @@
 
 (define-for-syntax (convert-calls stx)
   (syntax-case stx ()
-    [(synt synt-elem ...)
-     (and
-      (symbol? (syntax->datum #'synt))
-      (symbol=? 'call (syntax->datum #'synt)))
-     #`(cmd #,@(map convert-calls (syntax->list #'(synt-elem ...))))]
-    [(other other-elem ...) #`(other #,@(map convert-calls (syntax->list #'(other-elem ...))))]
-    [other #'other]))
+    [(synt-elem ...)
+     #`(#,@(map convert-calls (syntax->list #'(synt-elem ...))))]
+    [synt-elem
+     (and (symbol? (syntax->datum #'synt-elem))
+          (symbol=? 'call (syntax->datum #'synt-elem)))
+     #'cmd]
+    [synt-elem
+     #'synt-elem]))
 
 (define-for-syntax module-begin-def
   #`(...(define-syntax (module-begin stx)
