@@ -136,7 +136,9 @@
                  ([prev-bound
                    (λ (t)
                      (let ([prev-bound-vars-t
-                            (filter (λ (s) (symbol=? t (syntax->datum s)))
+                            (filter (λ (s) (symbol=?
+                                            t
+                                            (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
                                     (syntax->list #'(bound-var ...)))])
                        (if (empty? prev-bound-vars-t)
                            -1
