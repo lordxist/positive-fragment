@@ -116,7 +116,7 @@
           (syntax-case stx ()
             [(_ type elem ...) #'(i-lambda type () elem ...)]))))
 
-(define-for-syntax i-continuation-def
+(define-for-syntax (i-continuation-def recursion?)
   #`(...(define-syntax (i-lambda stx)
           (syntax-case stx ()
             [(_ type
@@ -173,10 +173,13 @@
                          [(p-start p-type pl nl)
                           (append-map bound-var-types (syntax->list #'pl))]))
                       symbol<?))]
+                  [prev-recs (prev-bound 'rec)]
+                  [current-rec (datum->syntax #f (string->symbol (string-append "rec-" (number->string (+ prev-recs 1)))))]
                   [updated-bounds
                    (λ (p c)
                      #`(i-cmd
-                        (#,@(append-map (((curry all-bound-vars) p) c) (bound-var-types p)))
+                        (#,@(append (append-map (((curry all-bound-vars) p) c) (bound-var-types p))
+                                    (if #,recursion? (list current-rec) empty)))
                         #,@(syntax->list
                             (syntax-case c ()
                               [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))]
@@ -218,14 +221,14 @@
                                (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
                                (syntax->list #'((cmd-start cmd-element ...) ...)))
                        [_ '()])])
-               #`(λ (case) (list #,match-case (list (pattern-start pattern-type pattern-element ...) ...))))]))))
+               #`(λ (case #,current-rec) (list #,match-case (list (pattern-start pattern-type pattern-element ...) ...))))]))))
 
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
           (syntax-case stx ()
             [(_ elem ...) #'(i-cmd () elem ...)]))))
 
-(define-for-syntax i-command-def
+(define-for-syntax (i-command-def recursion?)
   #`(...(define-syntax (i-cmd stx)
           (syntax-case stx ()
             [(_
@@ -241,14 +244,15 @@
               (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd"))
               (symbol=? (prefab-struct-key (syntax->datum #'cont-type))
                         (prefab-struct-key (syntax->datum #'val-type))))
-             #`((#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
-                 cont-type
-                 (bound-var ...)
-                 cont-element ...)
-                (#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'val-start)))))
-                 val-type
-                 (bound-var ...)
-                 val-element ...))]
+             (let ([cont #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
+                            cont-type
+                            (bound-var ...)
+                            cont-element ...)]
+                   [val #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'val-start)))))
+                           val-type
+                           (bound-var ...)
+                           val-element ...)])
+               #,(if recursion? #'#`(#,cont #,val #,cont) #'#`(#,cont #,val)))]
             [(_ (bound-var ...) daemon name ((arg-start arg-type arg-element ...) ...))
              (and
               (prefab-struct-key (syntax->datum #'name))
@@ -294,7 +298,27 @@
       (syntax-case stx ()
         [(_ type () ()) #''()])))
 
-(define-for-syntax (data-helper stx)
+(define-for-syntax rec-def
+  #`(...(define-syntax (rec stx)
+          (syntax-case stx ()
+            [(_ type () ())
+             #'(i-rec type () () ())]))))
+
+(define-for-syntax i-rec-def
+  #`(...(define-syntax (i-rec stx)
+          (syntax-case stx ()
+            [(_ type (bound-var ...) n ())
+             (number? (syntax->datum #'n))
+             (let ([recs
+                    (filter
+                     (λ (s) (symbol=? 'rec
+                                      (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
+                     (syntax->list #'(bound-var ...)))])
+               (if (> (syntax->datum #'n) (- (length recs) 1))
+                   #'unbound
+                   (list-ref recs (syntax->datum #'n))))]))))
+
+(define-for-syntax (data-helper recursion? stx)
   (syntax-case stx ()
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
      (let ([slist (syntax->list #'((name ((con (type ...) (cnt-type ...)) ...)) ...))]
@@ -302,22 +326,30 @@
                        (syntax->list #'(con ... ...)))])
        #`(begin
            (provide #%app lambda cmd var p-var con ... ... #,@pcons)
-           #,(linear-dependencies slist) ; disables recursive types
+           #,(unless recursion? (linear-dependencies slist)) ; disables recursive types
            #,(constructor-defs slist #f)
            #,continuation-def
-           #,i-continuation-def ; internal representation
+           #,(i-continuation-def recursion?) ; internal representation
            #,command-def
-           #,i-command-def ; internal representation
+           #,(i-command-def recursion?) ; internal representation
            #,variable-def
            #,i-variable-def ; internal representation (not strictly necessary, just to avoid a special case for the other grammar constructs)
            #,p-variable-def ; for variables in patterns (linear)
+           #,(when recursion? rec-def)   ; for recursive calls
+           #,(when recursion? i-rec-def) ; internal representation
            #,(constructor-defs slist "p")))])) ; for patterns
 
 (define-syntax (data stx)
   (syntax-case stx ()
+    [(data #s(recursive) #s(preprocess) (name ((con (type ...) (cnt-type ...)) ...)) ...)
+     (data-helper #t #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
+    [(data #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
+     #`(begin
+         (provide #%module-begin)
+         #,(data-helper #t #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...)))]
     [(data #s(preprocess) (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
+     (data-helper #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
      #`(begin
          (provide #%module-begin)
-         #,(data-helper #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...)))]))
+         #,(data-helper #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...)))]))
