@@ -3,18 +3,26 @@
 (require (only-in "../positive.rkt" [data posdata])
          (for-syntax racket/bool
                      racket/list
-                     racket/match))
+                     racket/match
+                     racket/string))
 
 (provide #%module-begin data)
 
 (define-for-syntax (convert-calls stx)
   (syntax-case stx ()
+    [(synt-start (abstr-start type abstr-elem ...) arg)
+     (and (symbol? (syntax->datum #'synt-start))
+          (symbol=? 'call (syntax->datum #'synt-start))
+          (symbol=? 'lambda (syntax->datum #'abstr-start)))
+     (if (string-prefix? (symbol->string (prefab-struct-key (syntax->datum #'type))) "abstr-")
+         #`(cmd (abstr-start type #,@(map convert-calls (syntax->list #'(abstr-elem ...)))) #,(convert-calls #'arg))
+         (raise-syntax-error #f "Only synthetic abstraction types allowed (encode first-order fun.s)"))]
+    [(synt-start synt-elem ...)
+     (and (symbol? (syntax->datum #'synt-start))
+          (symbol=? 'call (syntax->datum #'synt-start)))
+     #`(cmd #,@(map convert-calls (syntax->list #'(synt-elem ...))))]
     [(synt-elem ...)
      #`(#,@(map convert-calls (syntax->list #'(synt-elem ...))))]
-    [synt-elem
-     (and (symbol? (syntax->datum #'synt-elem))
-          (symbol=? 'call (syntax->datum #'synt-elem)))
-     #'cmd]
     [synt-elem
      #'synt-elem]))
 
