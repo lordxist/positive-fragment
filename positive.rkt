@@ -143,6 +143,7 @@
                        (if (empty? prev-bound-vars-t)
                            -1
                            (string->number (last (string-split (symbol->string (syntax->datum (last prev-bound-vars-t))) "-"))))))]
+                  [prev-bound-neg (λ (t) (prev-bound (string->symbol (string-append "neg-" (symbol->string t)))))]
                   [new-bound
                    (λ (t p)
                      (syntax-case p ()
@@ -151,17 +152,30 @@
                              (symbol=? (syntax->datum #'p-start) 'p-var))
                         1]
                        [(p-start p-type pl nl) (+ (foldl + 0 (map ((curry new-bound) t) (syntax->list #'pl))))]))]
+                  [new-bound-neg-helper
+                   (λ (top-level?)
+                     (λ (t p)
+                       (syntax-case p ()
+                         [(p-start p-type () ())
+                          (and (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
+                               (symbol=? (syntax->datum #'p-start) 'p-var))
+                          (if top-level? 0 1)]
+                         [(p-start p-type pl nl) (+ (foldl + 0 (map ((curry (new-bound-neg-helper #f)) t) (syntax->list #'nl))))])))]
+                  [new-bound-neg (new-bound-neg-helper #t)]
                   [all-bound
                    (λ (t p)
                      (+ (prev-bound t) (new-bound t p)))]
+                  [all-bound-neg
+                   (λ (t p)
+                     (+ (prev-bound-neg t) (new-bound-neg t p)))]
                   [new-bound-vars
                    (λ (p c t)
                      (map (λ (n) (datum->syntax c (string->symbol (string-append (symbol->string t) "-" (number->string n)))))
                           (range (+ (prev-bound t) 1) (+ (all-bound t p) 1))))]
-                  [all-bound-vars
+                  [new-bound-vars-neg
                    (λ (p c t)
-                     (append (syntax->list #'(bound-var ...))
-                             (new-bound-vars p c t)))]
+                     (map (λ (n) (datum->syntax c (string->symbol (string-append "neg-" (symbol->string t) "-" (number->string n)))))
+                          (range (+ (prev-bound-neg t) 1) (+ (all-bound-neg t p) 1))))]
                   [bound-var-types
                    (λ (p)
                      (sort
@@ -173,12 +187,27 @@
                          [(p-start p-type pl nl)
                           (append-map bound-var-types (syntax->list #'pl))]))
                       symbol<?))]
+                  [bound-var-types-neg-helper
+                   (λ (top-level?)
+                     (λ (p)
+                       (sort
+                        (remove-duplicates
+                         (syntax-case p ()
+                           [(p-start p-type () ())
+                            (symbol=? (syntax->datum #'p-start) 'p-var)
+                            (if top-level? empty? (list (prefab-struct-key (syntax->datum #'p-type))))]
+                           [(p-start p-type pl nl)
+                            (append-map (bound-var-types-neg-helper #f) (syntax->list #'nl))]))
+                        symbol<?)))]
+                  [bound-var-types-neg (bound-var-types-neg-helper #t)]
                   [prev-recs (prev-bound 'rec)]
                   [current-rec (datum->syntax #f (string->symbol (string-append "rec-" (number->string (+ prev-recs 1)))))]
                   [updated-bounds
                    (λ (p c)
                      #`(i-cmd
-                        (#,@(append (append-map (((curry all-bound-vars) p) c) (bound-var-types p))
+                        (#,@(append #'(bound-var ...)
+                                    (append-map (((curry new-bound-vars) p) c) (bound-var-types p))
+                                    (append-map (((curry new-bound-vars-neg) p) c) (bound-var-types-neg p))
                                     (if #,recursion? (list current-rec) empty)))
                         #,@(syntax->list
                             (syntax-case c ()
@@ -287,6 +316,28 @@
              (let ([vars-of-type
                     (filter
                      (λ (s) (symbol=? (prefab-struct-key (syntax->datum #'type))
+                                      (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
+                     (syntax->list #'(bound-var ...)))])
+               (if (> (syntax->datum #'n) (- (length vars-of-type) 1))
+                   #'unbound
+                   (list-ref vars-of-type (syntax->datum #'n))))]))))
+
+(define-for-syntax nvariable-def
+  #`(define-syntax (nvar stx)
+      (syntax-case stx ()
+        [(_ type n ())
+         (number? (syntax->datum #'n))
+         #'(i-nvar type () n ())])))
+
+(define-for-syntax i-nvariable-def
+  #`(...(define-syntax (i-nvar stx)
+          (syntax-case stx ()
+            [(_ type (bound-var ...) n ())
+             (number? (syntax->datum #'n))
+             (let ([vars-of-type
+                    (filter
+                     (λ (s) (symbol=? (prefab-struct-key (syntax->datum #'type))
+                                      ; TODO: strip away the "neg-" at the start
                                       (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
                      (syntax->list #'(bound-var ...)))])
                (if (> (syntax->datum #'n) (- (length vars-of-type) 1))
