@@ -135,9 +135,12 @@
              (letrec
                  ([prev-bound
                    (λ (t)
-                     (if (empty? (syntax->list #'(bound-var ...)))
-                         -1
-                         (string->number (last (string-split (symbol->string (syntax-e (last (syntax->list #'(bound-var ...))))) "-")))))]
+                     (let ([prev-bound-vars-t
+                            (filter (λ (s) (symbol=? t (syntax->datum s)))
+                                    (syntax->list #'(bound-var ...)))])
+                       (if (empty? prev-bound-vars-t)
+                           -1
+                           (string->number (last (string-split (symbol->string (syntax->datum (last prev-bound-vars-t))) "-"))))))]
                   [new-bound
                    (λ (t p)
                      (syntax-case p ()
