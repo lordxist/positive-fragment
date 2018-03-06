@@ -8,6 +8,10 @@
 
 (provide #%module-begin data)
 
+; TODO: This does not work (since `cmd` is not in scope anymore).
+; However, this "solution" would not have generalized well to a "building block" system anyway.
+; Instead, there should be extension points in `positive.rkt` which let the "application profiles"
+; restrict the grammar in "easy enough" ways (i.e. with very limited grammar check capabilies).
 (define-for-syntax (convert-calls stx)
   (syntax-case stx ()
     [(synt-start (abstr-start type abstr-elem ...) arg)
