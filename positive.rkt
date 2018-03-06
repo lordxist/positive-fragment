@@ -17,6 +17,13 @@
        [(name ((con (type ...) (cnt-type ...)) ...))
         #``(,type ... ... ,cnt-type ... ... ,(λ (name) #,(linear-dependencies r)))])]))
 
+(define-for-syntax (recursive-dependencies l)
+  #`(λ (#,@(map (λ (x) (syntax-case x () [(name def) #'name])) l))
+      `(#,@(append-map (λ (x) (syntax-case x ()
+                                [(name ((con (type ...) (cnt-type ...)) ...))
+                                 (syntax->list #'(,type ... ... ,cnt-type ... ...))]))
+                       l))))
+
 (define-for-syntax (constructor-defs-for-type l prefix)
   (match l
     ['() #''()]
@@ -388,7 +395,9 @@
                        (syntax->list #'(con ... ...)))])
        #`(begin
            (provide #%app lambda cmd var p-var con ... ... #,@pcons)
-           #,(unless recursion? (linear-dependencies slist)) ; disables recursive types
+           #,(if recursion?
+                 (recursive-dependencies slist)
+                 (linear-dependencies slist)) ; disables recursive types
            #,(constructor-defs slist #f)
            #,continuation-def
            #,(i-continuation-def recursion?) ; internal representation
