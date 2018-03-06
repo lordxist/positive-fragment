@@ -200,8 +200,10 @@
                             (append-map (bound-var-types-neg-helper #f) (syntax->list #'nl))]))
                         symbol<?)))]
                   [bound-var-types-neg (bound-var-types-neg-helper #t)]
-                  [prev-recs (prev-bound 'rec)]
-                  [current-rec (datum->syntax #f (string->symbol (string-append "rec-" (number->string (+ prev-recs 1)))))]
+                  [prev-recs
+                   (prev-bound (string->symbol (string-append "rec-" (symbol->string (prefab-struct-key (syntax->datum #'type))))))]
+                  [current-rec (datum->syntax #f (string->symbol (string-append "rec-" (symbol->string (prefab-struct-key (syntax->datum #'type)))
+                                                                                "-" (number->string (+ prev-recs 1)))))]
                   [updated-bounds
                    (λ (p c)
                      #`(i-cmd
@@ -371,8 +373,8 @@
              (number? (syntax->datum #'n))
              (let ([recs
                     (filter
-                     (λ (s) (symbol=? 'rec
-                                      (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
+                     (λ (s) (string=? (string-append "rec-" (symbol->string (prefab-struct-key (syntax->datum #'type))))
+                                      (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-")))
                      (syntax->list #'(bound-var ...)))])
                (if (> (syntax->datum #'n) (- (length recs) 1))
                    #'unbound

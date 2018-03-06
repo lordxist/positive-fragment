@@ -18,3 +18,12 @@
       ((lambda #s(nat)
          (((p-var #s(nat) () ()) (cmd daemon #s(print) ((var #s(nat) 0 ()))))
           (cmd daemon #s(impossible) ()))))))
+
+; does not typecheck
+; reason: the recursive call claims to reference function accepting `nat-fun` even though it really references one accepting `nat`
+;(cmd
+; (lambda #s(nat)
+;   (((p-var #s(nat) () ()) (cmd (rec #s(nat-fun) 0 ())
+;                                (fun #s(nat-fun) ((zero #s(nat) () ()) (zero #s(nat) () ())) ((lambda #s(nat) ((cmd daemon #s(ignored) ())))))))
+;    (cmd daemon #s(impossible) ())))
+; (zero #s(nat) () ()))
