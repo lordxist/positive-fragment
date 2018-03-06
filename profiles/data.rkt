@@ -50,6 +50,13 @@
 
 (define-syntax (data stx)
   (syntax-case stx ()
+    [(data #s(recursive) (name ((con (type ...)) ...)) ...)
+     #`(begin
+         (provide (rename-out [module-begin #%module-begin]))
+         (posdata #s(recursive) #s(preprocess)
+                  (name ((con (type ...) ()) ...)) ...
+                  #,@(synthetic-abstraction-types (syntax->list #'(name ...))))
+         #,module-begin-def)]
     [(data (name ((con (type ...)) ...)) ...)
      #`(begin
          (provide (rename-out [module-begin #%module-begin]))
