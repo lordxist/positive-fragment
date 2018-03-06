@@ -195,7 +195,7 @@
                          (syntax-case p ()
                            [(p-start p-type () ())
                             (symbol=? (syntax->datum #'p-start) 'p-var)
-                            (if top-level? empty? (list (prefab-struct-key (syntax->datum #'p-type))))]
+                            (if top-level? empty (list (prefab-struct-key (syntax->datum #'p-type))))]
                            [(p-start p-type pl nl)
                             (append-map (bound-var-types-neg-helper #f) (syntax->list #'nl))]))
                         symbol<?)))]
@@ -205,7 +205,7 @@
                   [updated-bounds
                    (λ (p c)
                      #`(i-cmd
-                        (#,@(append #'(bound-var ...)
+                        (#,@(append (syntax->list #'(bound-var ...))
                                     (append-map (((curry new-bound-vars) p) c) (bound-var-types p))
                                     (append-map (((curry new-bound-vars-neg) p) c) (bound-var-types-neg p))
                                     (if #,recursion? (list current-rec) empty)))
@@ -214,39 +214,48 @@
                               [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))]
                   [binding-check
                    (λ (p c)
-                     #`(λ (#,@(append-map (((curry new-bound-vars) p) c) (bound-var-types p))) #,(updated-bounds p c)))]
+                     #`(λ (#,@(append (append-map (((curry new-bound-vars) p) c) (bound-var-types p))
+                                      (append-map (((curry new-bound-vars-neg) p) c) (bound-var-types-neg p))))
+                         #,(updated-bounds p c)))]
                   [nvar (make-hash)]
+                  [nvar-neg (make-hash)]
                   [match-vars (make-hash)]
-                  [structify
-                   (λ (global-p p)
-                     (begin
-                       (unless (hash-has-key? nvar global-p)
+                  [match-vars-neg (make-hash)]
+                  [structify-helper
+                   (λ (neg?)
+                     (λ (global-p p)
+                       (begin
+                         (unless (hash-has-key? nvar global-p)
+                           (begin
+                             (hash-set! nvar global-p -1)
+                             (hash-set! nvar-neg global-p -1)
+                             (hash-set! match-vars global-p empty)
+                             (hash-set! match-vars-neg global-p empty)))
+                         (syntax-case p ()
+                           [(p-start p-type () ())
+                            (symbol=? 'p-var (syntax->datum #'p-start))
                             (begin
-                              (hash-set! nvar global-p -1)
-                              (hash-set! match-vars global-p empty)))
-                       (syntax-case p ()
-                         [(p-start p-type () ())
-                          (symbol=? 'p-var (syntax->datum #'p-start))
-                          (begin
-                            (hash-update! nvar global-p ((curry +) 1))
-                            (hash-update! match-vars global-p
-                                          ((curry cons) (datum->syntax #'p-start (string->symbol
-                                                                                  (string-append
-                                                                                   (symbol->string (prefab-struct-key (syntax->datum #'p-type)))
-                                                                                   "-" (number->string (hash-ref nvar global-p)))))))
-                            (first (hash-ref match-vars global-p)))]
-                         [(p-start p-type (p-element1 ...) (p-element2 ...))
-                          (let ([structify-result1 (map ((curry structify) global-p) (syntax->list #'(p-element1 ...)))]
-                                [structify-result2 (map ((curry structify) global-p) (syntax->list #'(p-element2 ...)))])
-                            #`(list
-                               `#,(make-prefab-struct (string->symbol (substring (symbol->string (syntax->datum #'p-start)) 2)))
-                               (list #,@structify-result1)
-                               (list #,@structify-result2)))])))]
+                              (hash-update! (if neg? nvar-neg nvar) global-p ((curry +) 1))
+                              (hash-update! (if neg? match-vars-neg match-vars) global-p
+                                            ((curry cons) (datum->syntax #'p-start (string->symbol
+                                                                                    (string-append
+                                                                                     (if neg? "neg-" "")
+                                                                                     (symbol->string (prefab-struct-key (syntax->datum #'p-type)))
+                                                                                     "-" (number->string (hash-ref (if neg? nvar-neg nvar) global-p)))))))
+                              (first (hash-ref (if neg? match-vars-neg match-vars) global-p)))]
+                           [(p-start p-type (p-element1 ...) (p-element2 ...))
+                            (let ([structify-result1 (map ((curry (structify-helper #f)) global-p) (syntax->list #'(p-element1 ...)))]
+                                  [structify-result2 (map ((curry (structify-helper #t)) global-p) (syntax->list #'(p-element2 ...)))])
+                              #`(list
+                                 `#,(make-prefab-struct (string->symbol (substring (symbol->string (syntax->datum #'p-start)) 2)))
+                                 (list #,@structify-result1)
+                                 (list #,@structify-result2)))]))))]
+                  [structify (structify-helper #f)]
                   [match-case
                    #`(match case
                        #,@(map (λ (p c) #`[#,(structify p p)
                                            (#,(binding-check p c)
-                                            #,@(reverse (hash-ref match-vars p)))])
+                                            #,@(append (reverse (hash-ref match-vars p)) (reverse (hash-ref match-vars-neg p))))])
                                (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
                                (syntax->list #'((cmd-start cmd-element ...) ...)))
                        [_ '()])])
@@ -267,7 +276,8 @@
              (and
               (or
                (string=? (symbol->string (syntax->datum #'cont-start)) "lambda")
-               (string=? (symbol->string (syntax->datum #'cont-start)) "var"))
+               (string=? (symbol->string (syntax->datum #'cont-start)) "nvar")
+               (if #,recursion? (string=? (symbol->string (syntax->datum #'cont-start)) "rec") #f))
               (not (string-prefix? (symbol->string (syntax->datum #'val-start)) "p-"))
               (not (string=? (symbol->string (syntax->datum #'val-start)) "lambda"))
               (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd"))
@@ -336,9 +346,8 @@
              (number? (syntax->datum #'n))
              (let ([vars-of-type
                     (filter
-                     (λ (s) (symbol=? (prefab-struct-key (syntax->datum #'type))
-                                      ; TODO: strip away the "neg-" at the start
-                                      (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
+                     (λ (s) (string=? (string-append "neg-" (symbol->string (prefab-struct-key (syntax->datum #'type))))
+                                      (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-")))
                      (syntax->list #'(bound-var ...)))])
                (if (> (syntax->datum #'n) (- (length vars-of-type) 1))
                    #'unbound
@@ -385,6 +394,8 @@
            #,(i-command-def recursion?) ; internal representation
            #,variable-def
            #,i-variable-def ; internal representation (not strictly necessary, just to avoid a special case for the other grammar constructs)
+           #,nvariable-def   ; for negative types
+           #,i-nvariable-def ; internal representation
            #,p-variable-def ; for variables in patterns (linear)
            #,(when recursion? rec-def)   ; for recursive calls
            #,(when recursion? i-rec-def) ; internal representation
