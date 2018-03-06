@@ -4,7 +4,7 @@
                                                   (((p-abstr-bool-unit-bool #s(abstr-bool-unit-bool)
                                                                           ((p-var #s(bool) () ()) (p-tt #s(unit) () ()))
                                                                           ((p-var #s(bool) () ())))
-                                                    (call (var #s(bool) 0 ()) (var #s(bool) 0 ())))
+                                                    (call (nvar #s(bool) 0 ()) (var #s(bool) 0 ())))
                                                    (cmd daemon #s(impossible) ())))
                                                 (abstr-bool-unit-bool #s(abstr-bool-unit-bool)
                                                                       ((var #s(bool) 0 ()) (tt #s(unit) () ()))
