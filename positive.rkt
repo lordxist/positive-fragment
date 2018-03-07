@@ -1,13 +1,15 @@
 #lang racket
 
-(provide #%module-begin data)
+(provide #%module-begin data
+         (for-syntax data-helper))
 
 (require (for-syntax racket/bool
                      racket/format
                      racket/function
                      racket/list
                      racket/match
-                     racket/string))
+                     racket/string
+                     "lib/structs.rkt"))
 
 (define-for-syntax (linear-dependencies l)
   (match l
@@ -277,7 +279,7 @@
           (syntax-case stx ()
             [(_ elem ...) #'(i-cmd () elem ...)]))))
 
-(define-for-syntax (i-command-def recursion?)
+(define-for-syntax (i-command-def recursion? profile)
   #`(...(define-syntax (i-cmd stx)
           (syntax-case stx ()
             [(_
@@ -294,15 +296,22 @@
               (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd"))
               (symbol=? (prefab-struct-key (syntax->datum #'cont-type))
                         (prefab-struct-key (syntax->datum #'val-type))))
-             (let ([cont #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
-                            cont-type
+             (let* ([cont #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
+                             cont-type
+                             (bound-var ...)
+                             cont-element ...)]
+                    [val #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'val-start)))))
+                            val-type
                             (bound-var ...)
-                            cont-element ...)]
-                   [val #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'val-start)))))
-                           val-type
-                           (bound-var ...)
-                           val-element ...)])
-               #,(if recursion? #'#`(#,cont #,val #,cont) #'#`(#,cont #,val)))]
+                            val-element ...)]
+                    [result #,(if recursion? #'#`(#,cont #,val #,cont) #'#`(#,cont #,val))])
+               #,(if (and profile (profile-cont-in-cmd profile)) ; extension point for profiles
+                     #`(if (or
+                            (not (string=? (symbol->string (syntax->datum #'cont-start)) #,(limitation-domain (profile-cont-in-cmd profile))))
+                            (string-prefix? (symbol->string (prefab-struct-key (syntax->datum #'cont-type))) #,(limitation-prefix (profile-cont-in-cmd profile))))
+                           result
+                           (raise-syntax-error #f #,(limitation-error-descr (profile-cont-in-cmd profile)) #'cont-start))
+                     #'result))]
             [(_ (bound-var ...) daemon name ((arg-start arg-type arg-element ...) ...))
              (and
               (prefab-struct-key (syntax->datum #'name))
@@ -389,14 +398,14 @@
                    #'unbound
                    (list-ref recs (syntax->datum #'n))))]))))
 
-(define-for-syntax (data-helper recursion? stx)
+(define-for-syntax (data-helper recursion? profile stx)
   (syntax-case stx ()
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
      (let ([slist (syntax->list #'((name ((con (type ...) (cnt-type ...)) ...)) ...))]
            [pcons (map (λ (s) (datum->syntax #f (string->symbol (string-append "p-" (symbol->string (syntax->datum s))))))
                        (syntax->list #'(con ... ...)))])
        #`(begin
-           (provide #%app lambda cmd var p-var con ... ... #,@pcons)
+           (provide #%module-begin #%app lambda cmd var p-var con ... ... #,@pcons)
            #,(if recursion?
                  (recursive-dependencies slist)
                  (linear-dependencies slist)) ; disables recursive types
@@ -404,7 +413,7 @@
            #,continuation-def
            #,(i-continuation-def recursion?) ; internal representation
            #,command-def
-           #,(i-command-def recursion?) ; internal representation
+           #,(i-command-def recursion? profile) ; internal representation
            #,variable-def
            #,i-variable-def ; internal representation (not strictly necessary, just to avoid a special case for the other grammar constructs)
            #,nvariable-def   ; for negative types
@@ -416,15 +425,7 @@
 
 (define-syntax (data stx)
   (syntax-case stx ()
-    [(data #s(recursive) #s(preprocess) (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #t #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
     [(data #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     #`(begin
-         (provide #%module-begin)
-         #,(data-helper #t #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...)))]
-    [(data #s(preprocess) (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
+     (data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     #`(begin
-         (provide #%module-begin)
-         #,(data-helper #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...)))]))
+     (data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]))
