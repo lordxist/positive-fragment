@@ -268,7 +268,9 @@
                                (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
                                (syntax->list #'((cmd-start cmd-element ...) ...)))
                        [_ '()])])
-               #`(λ (case #,current-rec) (list #,match-case (list (pattern-start pattern-type pattern-element ...) ...))))]))))
+               #,(if recursion?
+                     #'(... #`(λ (case #,current-rec) (list #,match-case (list (pattern-start pattern-type pattern-element ...) ...))))
+                     #'(... #`(λ (case) (list #,match-case (list (pattern-start pattern-type pattern-element ...) ...))))))]))))
 
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
