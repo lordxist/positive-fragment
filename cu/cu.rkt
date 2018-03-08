@@ -1,17 +1,10 @@
 #lang racket
 
-(require "../positive.rkt")
+(require (except-in "../positive.rkt" #%module-begin))
 
-(provide #%module-begin data codata)
+(provide (rename-out (module-begin #%module-begin)))
 
-(define-syntax (data stx)
-  (syntax-case stx ()
-    [(data #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
-    [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]))
-
-(define-syntax (codata stx)
+(define-syntax (module-begin stx)
   (let ([renaming #'(begin
                       (require (rename-in 'cd
                                           (lambda mu)
@@ -20,13 +13,31 @@
                                           (p-var p-varn)))
                       (provide mu cmdn varn p-varn))])
     (syntax-case stx ()
-      [(codata #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
-       #`(begin
-           (module cd "../positive.rkt"
-             #,(data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...)))
-         #,renaming)]
-      [(codata (name ((con (type ...) (cnt-type ...)) ...)) ...)
-       #`(begin
-           (module cd racket
-             #,(data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...)))
-           #,renaming)])))
+      [(module-begin (data #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
+                     (codata #s(recursive) (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...))
+       #`(#%module-begin
+          #,(data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))
+          (module cd "../positive.rkt"
+            #,(data-helper #t #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...)))
+          #,renaming)]
+      [(module-begin (data (name ((con (type ...) (cnt-type ...)) ...)) ...)
+                     (codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...))
+       #`(#%module-begin
+          #,(data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))
+          (module cd "../positive.rkt"
+            #,(data-helper #f #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...)))
+          #,renaming)]
+      [(module-begin (data #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
+                     (codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...))
+       #`(#%module-begin
+          #,(data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))
+          (module cd "../positive.rkt"
+            #,(data-helper #f #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...)))
+          #,renaming)]
+      [(module-begin (data (name ((con (type ...) (cnt-type ...)) ...)) ...)
+                     (codata #s(recursive) (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...))
+       #`(#%module-begin
+          #,(data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))
+          (module cd "../positive.rkt"
+            #,(data-helper #t #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...)))
+          #,renaming)])))
