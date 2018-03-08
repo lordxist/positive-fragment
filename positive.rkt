@@ -127,18 +127,17 @@
 
 (define-for-syntax (i-continuation-def types recursion?)
   #`(...(define-syntax (i-lambda stx)
-          (syntax-case stx ()
+          (syntax-case stx (cmd)
             [(_ type
                 (bound-var ...)
                 (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
-                 (fall-through-cmd-start fall-through-cmd-element ...)))
+                 (cmd fall-through-cmd-element ...)))
              (and
               (member (prefab-struct-key (syntax->datum #'type)) #,types)
               (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) "p-"))
                       (syntax->list #'(pattern-start ...)))
               (andmap (λ (s) (string=? (symbol->string (syntax->datum s)) "cmd"))
                       (syntax->list #'(cmd-start ...)))
-              (string=? (symbol->string (syntax->datum #'fall-through-cmd-start)) "cmd")
               (andmap (λ (s) (symbol=? (prefab-struct-key (syntax->datum #'type))
                                        (prefab-struct-key (syntax->datum s))))
                       (syntax->list #'(pattern-type ...))))
