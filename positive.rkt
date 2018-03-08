@@ -125,7 +125,7 @@
           (syntax-case stx ()
             [(_ type elem ...) #'(i-lambda type () elem ...)]))))
 
-(define-for-syntax (i-continuation-def recursion?)
+(define-for-syntax (i-continuation-def types recursion?)
   #`(...(define-syntax (i-lambda stx)
           (syntax-case stx ()
             [(_ type
@@ -133,6 +133,7 @@
                 (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
                  (fall-through-cmd-start fall-through-cmd-element ...)))
              (and
+              (member (prefab-struct-key (syntax->datum #'type)) #,types)
               (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) "p-"))
                       (syntax->list #'(pattern-start ...)))
               (andmap (λ (s) (string=? (symbol->string (syntax->datum s)) "cmd"))
@@ -411,7 +412,7 @@
                  (linear-dependencies slist)) ; disables recursive types
            #,(constructor-defs slist #f)
            #,continuation-def
-           #,(i-continuation-def recursion?) ; internal representation
+           #,(i-continuation-def #''(name ...) recursion?) ; internal representation
            #,command-def
            #,(i-command-def recursion? profile) ; internal representation
            #,variable-def
