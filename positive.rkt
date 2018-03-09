@@ -16,58 +16,74 @@
     ['() #''()]
     [(cons x r)
      (syntax-case x ()
+       [(name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...))
+        (linear-dependencies (cons #'(name ((con (type ...) (cnt-type ...)) ...)) r))]
        [(name ((con (type ...) (cnt-type ...)) ...))
         #``(,type ... ... ,cnt-type ... ... ,(λ (name) #,(linear-dependencies r)))])]))
 
 (define-for-syntax (recursive-dependencies l)
   #`(λ (#,@(map (λ (x) (syntax-case x () [(name def) #'name])) l))
       `(#,@(append-map (λ (x) (syntax-case x ()
+                                [(name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...))
+                                 (syntax->list #'(,type ... ... ,cnt-type ... ...))]
                                 [(name ((con (type ...) (cnt-type ...)) ...))
                                  (syntax->list #'(,type ... ... ,cnt-type ... ...))]))
                        l))))
 
-(define-for-syntax (constructor-def-for-type x prefix)
-  (syntax-case x ()
-    [(con tname (type ...) (cnt-type ...))
-     (let ([argheads
-            (map (λ (n) (datum->syntax #f (string->symbol (string-append "sub" (~a n)))))
-                 (range (length (syntax->list #'(type ...)))))]
-           [args
-            (map (λ (n s) #`(#,(datum->syntax #f (string->symbol (string-append "sub" (~a n))))
+(define-for-syntax (constructor-def-for-type x prefix shiftinfo [disable-subshifts #f])
+  (if shiftinfo
+      (syntax-case x ()
+        [(con tname (type ...) (cnt-type ...) (shifted-type ...))
+         (let ([argheads
+                (map (λ (n) (datum->syntax #f (string->symbol (string-append "sub" (~a n)))))
+                     (range (length (syntax->list #'(type ...)))))]
+               [args
+                (map (λ (n s) #`(#,(datum->syntax #f (string->symbol (string-append "sub" (~a n))))
                                  #,(make-prefab-struct (syntax->datum s))
                                  #,(datum->syntax #f (string->symbol (string-append "args" (~a n))))
-                                 #,(datum->syntax #f (string->symbol (string-append "scargs" (~a n))))))
-                 (range (length (syntax->list #'(type ...))))
-                 (syntax->list #'(type ...)))]
-           [cargheads
-            (map (λ (n) (datum->syntax #f (string->symbol (string-append "cstart" (~a n)))))
-                 (range (length (syntax->list #'(cnt-type ...)))))]
-           [cargs
-            (map
-             (λ (n s) #`(...(#,(datum->syntax #f (string->symbol (string-append "cstart" (~a n))))
-                                #,(make-prefab-struct (syntax->datum s))
-                                #,(datum->syntax #f (string->symbol (string-append "celem" (~a n)))) ...)))
-             (range (length (syntax->list #'(cnt-type ...))))
-             (syntax->list #'(cnt-type ...)))])
-       #`(...
-          (begin
-            #,(unless prefix
-                #`(...
-                   (define-syntax (con stx)
-                        (syntax-case stx ()
-                          [(_ type2 elem ...)
-                           #'(#,(string->symbol (string-append "i-" (symbol->string (syntax->datum #'con))))
-                              type2 () elem ...)]))))
-            (define-syntax
-              (#,(if prefix
-                     (datum->syntax #f (string->symbol (string-append prefix "-" (symbol->string (syntax->datum #'con)))))
-                     (datum->syntax #f (string->symbol (string-append "i-" (symbol->string (syntax->datum #'con))))))
-               stx)
+                                 #,(datum->syntax #f (string->symbol (string-append "scargs" (~a n))))
+                                 #,@(if disable-subshifts empty (list (datum->syntax #f (string->symbol (string-append "sshargs" (~a n))))))))
+                     (range (length (syntax->list #'(type ...))))
+                     (syntax->list #'(type ...)))]
+               [cargheads
+                (map (λ (n) (datum->syntax #f (string->symbol (string-append "cstart" (~a n)))))
+                     (range (length (syntax->list #'(cnt-type ...)))))]
+               [cargs
+                (map
+                 (λ (n s) #`(...(#,(datum->syntax #f (string->symbol (string-append "cstart" (~a n))))
+                                 #,(make-prefab-struct (syntax->datum s))
+                                 #,(datum->syntax #f (string->symbol (string-append "celem" (~a n)))) ...)))
+                 (range (length (syntax->list #'(cnt-type ...))))
+                 (syntax->list #'(cnt-type ...)))]
+               [shargheads
+                (map (λ (n) (datum->syntax #f (string->symbol (string-append "shstart" (~a n)))))
+                     (range (length (syntax->list #'(shifted-type ...)))))]
+               [shargs
+                (map
+                 (λ (n s) #`(...(#,(datum->syntax #f (string->symbol (string-append "shstart" (~a n))))
+                                 #,(make-prefab-struct (syntax->datum s))
+                                 #,(datum->syntax #f (string->symbol (string-append "shelem" (~a n)))) ...)))
+                 (range (length (syntax->list #'(shifted-type ...))))
+                 (syntax->list #'(shifted-type ...)))])
+           #`(...
+              (begin
+                #,(unless prefix
+                    #`(...
+                       (define-syntax (con stx)
+                         (syntax-case stx ()
+                           [(_ type2 elem ...)
+                            #'(#,(string->symbol (string-append "i-" (symbol->string (syntax->datum #'con))))
+                               type2 () elem ...)]))))
+                (define-syntax
+                  (#,(if prefix
+                         (datum->syntax #f (string->symbol (string-append prefix "-" (symbol->string (syntax->datum #'con)))))
+                         (datum->syntax #f (string->symbol (string-append "i-" (symbol->string (syntax->datum #'con))))))
+                   stx)
                   #,(if prefix
                         #`
                         (syntax-case stx (lambda var)
                           [(_ #,(make-prefab-struct (syntax->datum #'tname))
-                              (#,@args) (#,@cargs))
+                              (#,@args) (#,@cargs) #,@(if disable-subshifts empty (list #`(#,@shargs))))
                            (and
                             (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-")))
                                     (syntax->list #'(#,@argheads)))
@@ -75,15 +91,21 @@
                                       (let ([name (symbol->string (syntax->datum s))])
                                         (or (string=? (symbol->string (syntax->datum #'lambda)) name)
                                             (string=? (string-append #,prefix "-" (symbol->string (syntax->datum #'var))) name))))
-                                    (syntax->list #'(#,@cargheads))))
+                                    (syntax->list #'(#,@cargheads)))
+                            (andmap (λ (s)
+                                      (let ([name (symbol->string (syntax->datum s))])
+                                        (or (string=? #,(shifts-opposite-lambda shiftinfo) name)
+                                            (string=? (string-append #,prefix "-" #,(shifts-opposite-var shiftinfo)) name))))
+                                    (syntax->list #'(#,@shargheads))))
                            #'`(#,@(map (λ (s) #`,#,s) args)
                                #,@(map (λ (s) #`,#,s) cargs)
+                               #,@(if disable-subshifts empty (map (λ (s) #`,#,s) shargs))
                                )])
                         #`
                         (syntax-case stx (lambda var)
                           [(_ #,(make-prefab-struct (syntax->datum #'tname))
                               #,#'(...(bound-var ...))
-                              (#,@args) (#,@cargs))
+                              (#,@args) (#,@cargs) #,@(if disable-subshifts empty (list #`(#,@shargs))))
                            (and
                             (andmap (λ (s) (and
                                             (not (string-contains? (symbol->string (syntax->datum s)) "-"))
@@ -92,7 +114,11 @@
                             (andmap (λ (s) (let ([name (symbol->string (syntax->datum s))])
                                              (or (string=? (symbol->string (syntax->datum #'lambda)) name)
                                                  (string=? (symbol->string (syntax->datum #'var)) name))))
-                                    (syntax->list #'(#,@cargheads))))
+                                    (syntax->list #'(#,@cargheads)))
+                            (andmap (λ (s) (let ([name (symbol->string (syntax->datum s))])
+                                             (or (string=? #,(shifts-opposite-lambda shiftinfo) name)
+                                                 (string=? #,(shifts-opposite-var shiftinfo) name))))
+                                    (syntax->list #'(#,@shargheads))))
                            (let ([i-args
                                   (λ (arglist)
                                     (map
@@ -105,25 +131,29 @@
                                      arglist))])
                              #`(list #,(make-prefab-struct (syntax->datum #'con))
                                      (list #,@(i-args (syntax->list #'(#,@args))))
-                                     (list #,@(i-args (syntax->list #'(#,@cargs))))))]))))))]))
+                                     (list #,@(i-args (syntax->list #'(#,@cargs))))
+                                     (list #,@(if #,disable-subshifts empty (i-args (syntax->list #'(#,@shargs)))))))]))))))])
+      (syntax-case x ()
+        [(con tname (type ...) (cnt-type ...))
+         (constructor-def-for-type #'(con tname (type ...) (cnt-type ...) ()) prefix (shifts "" "") #t)])))
 
-(define-for-syntax (constructor-defs-for-type l prefix)
+(define-for-syntax (constructor-defs-for-type l prefix shifts)
   (match l
     ['() #''()]
     [(cons x r)
      #`(begin
-         #,(constructor-def-for-type x prefix)
-         #,(constructor-defs-for-type r prefix))]))
+         #,(constructor-def-for-type x prefix shifts)
+         #,(constructor-defs-for-type r prefix shifts))]))
 
-(define-for-syntax (constructor-defs l prefix)
+(define-for-syntax (constructor-defs l prefix shifts)
   (match l
     ['() #''()]
     [(cons x r)
      (syntax-case x ()
-       [(name ((con (type ...) (cnt-type ...)) ...))
+       [(name ((con elem ...) ...))
         #`(begin
-            #,(constructor-defs-for-type (syntax->list #'((con name (type ...) (cnt-type ...)) ...)) prefix)
-            #,(constructor-defs r prefix))])]))
+            #,(constructor-defs-for-type (syntax->list #'((con name elem ...) ...)) prefix shifts)
+            #,(constructor-defs r prefix shifts))])]))
 
 (define-for-syntax continuation-def
   #`(...(define-syntax (lambda stx)
@@ -334,17 +364,17 @@
                            (syntax->list
                             #'((arg-start arg-type (bound-var ...) arg-element ...) ...)))))]))))
 
-(define-for-syntax variable-def
+(define-for-syntax (variable-def shifts?)
   #`(define-syntax (var stx)
       (syntax-case stx ()
-        [(_ type n ())
+        [(_ type n () #,@(if shifts? (list #'()) empty))
          (number? (syntax->datum #'n))
          #'(i-var type () n ())])))
 
-(define-for-syntax i-variable-def
+(define-for-syntax (i-variable-def shifts)
   #`(...(define-syntax (i-var stx)
           (syntax-case stx ()
-            [(_ type (bound-var ...) n ())
+            [(_ type (bound-var ...) n () #,@(if shifts? (list #'()) empty))
              (number? (syntax->datum #'n))
              (let ([vars-of-type
                     (filter
@@ -355,17 +385,17 @@
                    #'unbound
                    (list-ref vars-of-type (syntax->datum #'n))))]))))
 
-(define-for-syntax nvariable-def
+(define-for-syntax (nvariable-def shifts?)
   #`(define-syntax (nvar stx)
       (syntax-case stx ()
-        [(_ type n ())
+        [(_ type n () #,@(if shifts? (list #'()) empty))
          (number? (syntax->datum #'n))
          #'(i-nvar type () n ())])))
 
-(define-for-syntax i-nvariable-def
+(define-for-syntax (i-nvariable-def shifts?)
   #`(...(define-syntax (i-nvar stx)
           (syntax-case stx ()
-            [(_ type (bound-var ...) n ())
+            [(_ type (bound-var ...) n () #,@(if shifts? (list #'()) empty))
              (number? (syntax->datum #'n))
              (let ([vars-of-type
                     (filter
@@ -376,21 +406,21 @@
                    #'unbound
                    (list-ref vars-of-type (syntax->datum #'n))))]))))
 
-(define-for-syntax p-variable-def
+(define-for-syntax (p-variable-def shifts?)
   #`(define-syntax (p-var stx)
       (syntax-case stx ()
-        [(_ type () ()) #''()])))
+        [(_ type () () #,@(if shifts? (list #'()) empty)) #''()])))
 
-(define-for-syntax rec-def
+(define-for-syntax (rec-def shifts?)
   #`(...(define-syntax (rec stx)
           (syntax-case stx ()
-            [(_ type () ())
+            [(_ type () () #,@(if shifts? (list #'()) empty))
              #'(i-rec type () () ())]))))
 
-(define-for-syntax i-rec-def
+(define-for-syntax (i-rec-def shifts?)
   #`(...(define-syntax (i-rec stx)
           (syntax-case stx ()
-            [(_ type (bound-var ...) n ())
+            [(_ type (bound-var ...) n () #,@(if shifts? (list #'()) empty))
              (number? (syntax->datum #'n))
              (let ([recs
                     (filter
@@ -401,10 +431,14 @@
                    #'unbound
                    (list-ref recs (syntax->datum #'n))))]))))
 
-(define-for-syntax (data-helper recursion? profile stx)
+(define-for-syntax (data-helper recursion? profile stx [shifts #f])
   (syntax-case stx ()
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (let ([slist (syntax->list #'((name ((con (type ...) (cnt-type ...)) ...)) ...))]
+     (data-helper recursion? profile #'(data (name ((con (type ...) (cnt-type ...) ()) ...)) ...) #f)]
+    [(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...)
+     (let ([slist (syntax->list (if shifts
+                                    #'((name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...)
+                                    #'((name ((con (type ...) (cnt-type ...)) ...)) ...)))]
            [pcons (map (λ (s) (datum->syntax #f (string->symbol (string-append "p-" (symbol->string (syntax->datum s))))))
                        (syntax->list #'(con ... ...)))])
        #`(begin
@@ -413,19 +447,19 @@
            #,(if recursion?
                  (recursive-dependencies slist)
                  (linear-dependencies slist)) ; disables recursive types
-           #,(constructor-defs slist #f)
+           #,(constructor-defs slist #f shifts)
            #,continuation-def
            #,(i-continuation-def #''(name ...) recursion?) ; internal representation
            #,command-def
            #,(i-command-def recursion? profile) ; internal representation
-           #,variable-def
-           #,i-variable-def ; internal representation (not strictly necessary, just to avoid a special case for the other grammar constructs)
-           #,nvariable-def   ; for negative types
-           #,i-nvariable-def ; internal representation
-           #,p-variable-def ; for variables in patterns (linear)
-           #,(when recursion? rec-def)   ; for recursive calls
-           #,(when recursion? i-rec-def) ; internal representation
-           #,(constructor-defs slist "p")))])) ; for patterns
+           #,(variable-def shifts)
+           #,(i-variable-def shifts) ; internal representation (not strictly necessary, just to avoid a special case for the other grammar constructs)
+           #,(nvariable-def shifts)   ; for negative types
+           #,(i-nvariable-def shifts) ; internal representation
+           #,(p-variable-def shifts) ; for variables in patterns (linear)
+           #,(when recursion? (rec-def shifts))   ; for recursive calls
+           #,(when recursion? (i-rec-def shifts)) ; internal representation
+           #,(constructor-defs slist "p" shifts)))])) ; for patterns
 
 (define-syntax (data stx)
   (syntax-case stx ()

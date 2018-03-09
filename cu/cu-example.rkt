@@ -4,8 +4,8 @@
  #s(recursive)
 
  (nat
-  ([zero () ()]
-   [succ (nat) ()]))
+  ([zero () () ()]
+   [succ (nat) () ()]))
  )
 
 (codata
@@ -13,6 +13,12 @@
 
  (bot ())
  
- (pair-fun
-  ([fun (bot) (bot)]))
+ (bot-fun
+  ([bot-fun (bot) (bot) ()]))
+
+ (shift-nat
+  ([shift-nat () () (nat)]))
+ 
+ (nat-fun
+  ([apply (shift-nat) (shift-nat) ()]))
  )
