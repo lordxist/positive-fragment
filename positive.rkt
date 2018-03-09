@@ -186,30 +186,44 @@
                            -1
                            (string->number (last (string-split (symbol->string (syntax->datum (last prev-bound-vars-t))) "-"))))))]
                   [prev-bound-neg (λ (t) (prev-bound (string->symbol (string-append "neg-" (symbol->string t)))))]
+                  [prev-bound-sh (λ (t) (prev-bound (string->symbol (string-append "sh-" (symbol->string t)))))]
                   [new-bound
                    (λ (t p)
                      (syntax-case p ()
-                       [(p-start p-type () ())
+                       [(p-start p-type () () ())
                         (and (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
                              (symbol=? (syntax->datum #'p-start) 'p-var))
                         1]
-                       [(p-start p-type pl nl) (+ (foldl + 0 (map ((curry new-bound) t) (syntax->list #'pl))))]))]
+                       [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry new-bound) t) (syntax->list #'pl))))]))]
                   [new-bound-neg-helper
                    (λ (top-level?)
                      (λ (t p)
                        (syntax-case p ()
-                         [(p-start p-type () ())
+                         [(p-start p-type () () ())
                           (and (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
                                (symbol=? (syntax->datum #'p-start) 'p-var))
                           (if top-level? 0 1)]
-                         [(p-start p-type pl nl) (+ (foldl + 0 (map ((curry (new-bound-neg-helper #f)) t) (syntax->list #'nl))))])))]
+                         [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry (new-bound-neg-helper #f)) t) (syntax->list #'nl))))])))]
                   [new-bound-neg (new-bound-neg-helper #t)]
+                  [new-bound-sh-helper
+                   (λ (top-level?)
+                     (λ (t p)
+                       (syntax-case p ()
+                         [(p-start p-type () () ())
+                          (and (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
+                               (symbol=? (syntax->datum #'p-start) 'p-var))
+                          (if top-level? 0 1)]
+                         [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry (new-bound-sh-helper #f)) t) (syntax->list #'sl))))])))]
+                  [new-bound-sh (new-bound-sh-helper #t)]
                   [all-bound
                    (λ (t p)
                      (+ (prev-bound t) (new-bound t p)))]
                   [all-bound-neg
                    (λ (t p)
                      (+ (prev-bound-neg t) (new-bound-neg t p)))]
+                  [all-bound-sh
+                   (λ (t p)
+                     (+ (prev-bound-sh t) (new-bound-sh t p)))]
                   [new-bound-vars
                    (λ (p c t)
                      (map (λ (n) (datum->syntax c (string->symbol (string-append (symbol->string t) "-" (number->string n)))))
@@ -218,15 +232,19 @@
                    (λ (p c t)
                      (map (λ (n) (datum->syntax c (string->symbol (string-append "neg-" (symbol->string t) "-" (number->string n)))))
                           (range (+ (prev-bound-neg t) 1) (+ (all-bound-neg t p) 1))))]
+                  [new-bound-vars-sh
+                   (λ (p c t)
+                     (map (λ (n) (datum->syntax c (string->symbol (string-append "sh-" (symbol->string t) "-" (number->string n)))))
+                          (range (+ (prev-bound-sh t) 1) (+ (all-bound-sh t p) 1))))]
                   [bound-var-types
                    (λ (p)
                      (sort
                       (remove-duplicates
                        (syntax-case p ()
-                         [(p-start p-type () ())
+                         [(p-start p-type () () ())
                           (symbol=? (syntax->datum #'p-start) 'p-var)
                           (list (prefab-struct-key (syntax->datum #'p-type)))]
-                         [(p-start p-type pl nl)
+                         [(p-start p-type pl nl sl)
                           (append-map bound-var-types (syntax->list #'pl))]))
                       symbol<?))]
                   [bound-var-types-neg-helper
@@ -235,13 +253,26 @@
                        (sort
                         (remove-duplicates
                          (syntax-case p ()
-                           [(p-start p-type () ())
+                           [(p-start p-type () () ())
                             (symbol=? (syntax->datum #'p-start) 'p-var)
                             (if top-level? empty (list (prefab-struct-key (syntax->datum #'p-type))))]
-                           [(p-start p-type pl nl)
+                           [(p-start p-type pl nl sl)
                             (append-map (bound-var-types-neg-helper #f) (syntax->list #'nl))]))
                         symbol<?)))]
                   [bound-var-types-neg (bound-var-types-neg-helper #t)]
+                  [bound-var-types-sh-helper
+                   (λ (top-level?)
+                     (λ (p)
+                       (sort
+                        (remove-duplicates
+                         (syntax-case p ()
+                           [(p-start p-type () () ())
+                            (symbol=? (syntax->datum #'p-start) 'p-var)
+                            (if top-level? empty (list (prefab-struct-key (syntax->datum #'p-type))))]
+                           [(p-start p-type pl nl sl)
+                            (append-map (bound-var-types-sh-helper #f) (syntax->list #'nl))]))
+                        symbol<?)))]
+                  [bound-var-types-sh (bound-var-types-sh-helper #t)]
                   [prev-recs
                    (prev-bound (string->symbol (string-append "rec-" (symbol->string (prefab-struct-key (syntax->datum #'type))))))]
                   [current-rec (datum->syntax #f (string->symbol (string-append "rec-" (symbol->string (prefab-struct-key (syntax->datum #'type)))
@@ -252,6 +283,7 @@
                         (#,@(append (syntax->list #'(bound-var ...))
                                     (append-map (((curry new-bound-vars) p) c) (bound-var-types p))
                                     (append-map (((curry new-bound-vars-neg) p) c) (bound-var-types-neg p))
+                                    (append-map (((curry new-bound-vars-sh) p) c) (bound-var-types-sh p))
                                     (if #,recursion? (list current-rec) empty)))
                         #,@(syntax->list
                             (syntax-case c ()
@@ -259,48 +291,76 @@
                   [binding-check
                    (λ (p c)
                      #`(λ (#,@(append (append-map (((curry new-bound-vars) p) c) (bound-var-types p))
-                                      (append-map (((curry new-bound-vars-neg) p) c) (bound-var-types-neg p))))
+                                      (append-map (((curry new-bound-vars-neg) p) c) (bound-var-types-neg p))
+                                      (append-map (((curry new-bound-vars-sh) p) c) (bound-var-types-sh p))))
                          #,(updated-bounds p c)))]
                   [nvar (make-hash)]
                   [nvar-neg (make-hash)]
+                  [nvar-sh (make-hash)]
                   [match-vars (make-hash)]
                   [match-vars-neg (make-hash)]
+                  [match-vars-sh (make-hash)]
                   [structify-helper
-                   (λ (neg?)
+                   (λ (mode)
                      (λ (global-p p)
                        (begin
                          (unless (hash-has-key? nvar global-p)
                            (begin
                              (hash-set! nvar global-p -1)
                              (hash-set! nvar-neg global-p -1)
+                             (hash-set! nvar-sh global-p -1)
                              (hash-set! match-vars global-p empty)
-                             (hash-set! match-vars-neg global-p empty)))
+                             (hash-set! match-vars-neg global-p empty)
+                             (hash-set! match-vars-sh global-p empty)))
                          (syntax-case p ()
-                           [(p-start p-type () ())
+                           [(p-start p-type () () ())
                             (symbol=? 'p-var (syntax->datum #'p-start))
                             (begin
-                              (hash-update! (if neg? nvar-neg nvar) global-p ((curry +) 1))
-                              (hash-update! (if neg? match-vars-neg match-vars) global-p
+                              (hash-update! (cond [(symbol=? 'sh mode) nvar-sh]
+                                                  [(symbol=? 'neg mode) nvar-neg]
+                                                  [else nvar])
+                                            global-p ((curry +) 1))
+                              (hash-update! (cond [(symbol=? 'sh mode) match-vars-sh]
+                                                  [(symbol=? 'neg mode) match-vars-neg]
+                                                  [else match-vars])
+                                            global-p
                                             ((curry cons) (datum->syntax #'p-start (string->symbol
                                                                                     (string-append
-                                                                                     (if neg? "neg-" "")
+                                                                                     (cond [(symbol=? 'sh mode) "sh-"]
+                                                                                           [(symbol=? 'neg mode) "neg-"]
+                                                                                           [else ""])
                                                                                      (symbol->string (prefab-struct-key (syntax->datum #'p-type)))
-                                                                                     "-" (number->string (hash-ref (if neg? nvar-neg nvar) global-p)))))))
-                              (first (hash-ref (if neg? match-vars-neg match-vars) global-p)))]
-                           [(p-start p-type (p-element1 ...) (p-element2 ...))
-                            (let ([structify-result1 (map ((curry (structify-helper #f)) global-p) (syntax->list #'(p-element1 ...)))]
-                                  [structify-result2 (map ((curry (structify-helper #t)) global-p) (syntax->list #'(p-element2 ...)))])
+                                                                                     "-" (number->string (hash-ref (cond [(symbol=? 'sh mode) nvar-sh]
+                                                                                                                         [(symbol=? 'neg mode) nvar-neg]
+                                                                                                                         [else nvar])
+                                                                                                                   global-p)))))))
+                              (first (hash-ref (cond [(symbol=? 'sh mode) nvar-sh]
+                                                     [(symbol=? 'neg mode) nvar-neg]
+                                                     [else nvar])
+                                               global-p)))]
+                           [(p-start p-type (p-element1 ...) (p-element2 ...) (p-element3 ...))
+                            (let ([structify-result1 (map ((curry (structify-helper 'normal)) global-p) (syntax->list #'(p-element1 ...)))]
+                                  [structify-result2 (map ((curry (structify-helper 'neg)) global-p) (syntax->list #'(p-element2 ...)))]
+                                  [structify-result3 (map ((curry (structify-helper 'sh)) global-p) (syntax->list #'(p-element3 ...)))])
                               #`(list
                                  `#,(make-prefab-struct (string->symbol (substring (symbol->string (syntax->datum #'p-start)) 2)))
                                  (list #,@structify-result1)
-                                 (list #,@structify-result2)))]))))]
+                                 (list #,@structify-result2)
+                                 (list #,@structify-result3)))]))))]
                   [structify (structify-helper #f)]
                   [match-case
                    #`(match case
                        #,@(map (λ (p c) #`[#,(structify p p)
                                            (#,(binding-check p c)
                                             #,@(append (reverse (hash-ref match-vars p)) (reverse (hash-ref match-vars-neg p))))])
-                               (syntax->list #'((pattern-start pattern-type pattern-element ...) ...))
+                               (map
+                                (λ (s)
+                                  (syntax-case s ()
+                                    [(p-start p-type p-elem1 p-elem2)
+                                     #'(p-start p-type p-elem1 p-elem2 ())]
+                                    [other
+                                     #'other]))
+                                (syntax->list #'((pattern-start pattern-type pattern-element ...) ...)))
                                (syntax->list #'((cmd-start cmd-element ...) ...)))
                        [_ '()])])
                #,(if recursion?
