@@ -68,7 +68,7 @@
                   stx)
                  #,(if prefix
                        #`
-                       (syntax-case stx ()
+                       (syntax-case stx (lambda var)
                          [(_ #,(make-prefab-struct (syntax->datum #'tname))
                              (#,@args) (#,@cargs))
                           (and
@@ -76,24 +76,25 @@
                                   (syntax->list #'(#,@argheads)))
                            (andmap (λ (s)
                                      (let ([name (symbol->string (syntax->datum s))])
-                                       (or (string=? "lambda" name) (string=? (string-append #,prefix "-var") name))))
+                                       (or (string=? (symbol->string (syntax->datum #'lambda)) name)
+                                           (string=? (string-append #,prefix "-" (symbol->string (syntax->datum #'var))) name))))
                                    (syntax->list #'(#,@cargheads))))
                           #'`(#,@(map (λ (s) #`,#,s) args)
                               #,@(map (λ (s) #`,#,s) cargs)
                               )])
                        #`
-                       (syntax-case stx ()
+                       (syntax-case stx (lambda var)
                          [(_ #,(make-prefab-struct (syntax->datum #'tname))
                              #,#'(...(bound-var ...))
                              (#,@args) (#,@cargs))
                           (and
                            (andmap (λ (s) (and
                                            (not (string-contains? (symbol->string (syntax->datum s)) "-"))
-                                           (not (string=? "lambda" (symbol->string (syntax->datum s))))
-                                           (not (string=? "cmd" (symbol->string (syntax->datum s))))))
+                                           (not (symbol=? (syntax->datum #'lambda) (syntax->datum s)))))
                                    (syntax->list #'(#,@argheads)))
                            (andmap (λ (s) (let ([name (symbol->string (syntax->datum s))])
-                                       (or (string=? "lambda" name) (string=? "var" name))))
+                                       (or (string=? (symbol->string (syntax->datum #'lambda)) name)
+                                           (string=? (symbol->string (syntax->datum #'var)) name))))
                                    (syntax->list #'(#,@cargheads))))
                           (let ([i-args
                                  (λ (arglist)
@@ -130,14 +131,12 @@
           (syntax-case stx (cmd)
             [(_ type
                 (bound-var ...)
-                (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
+                (((pattern-start pattern-type pattern-element ...) (cmd cmd-element ...)) ...
                  (cmd fall-through-cmd-element ...)))
              (and
               (member (prefab-struct-key (syntax->datum #'type)) #,types)
               (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) "p-"))
                       (syntax->list #'(pattern-start ...)))
-              (andmap (λ (s) (string=? (symbol->string (syntax->datum s)) "cmd"))
-                      (syntax->list #'(cmd-start ...)))
               (andmap (λ (s) (symbol=? (prefab-struct-key (syntax->datum #'type))
                                        (prefab-struct-key (syntax->datum s))))
                       (syntax->list #'(pattern-type ...))))
@@ -281,19 +280,19 @@
 
 (define-for-syntax (i-command-def recursion? profile)
   #`(...(define-syntax (i-cmd stx)
-          (syntax-case stx ()
+          (syntax-case stx (lambda nvar cmd rec)
             [(_
               (bound-var ...)
               (cont-start cont-type cont-element ...)
               (val-start val-type val-element ...))
              (and
               (or
-               (string=? (symbol->string (syntax->datum #'cont-start)) "lambda")
-               (string=? (symbol->string (syntax->datum #'cont-start)) "nvar")
-               (if #,recursion? (string=? (symbol->string (syntax->datum #'cont-start)) "rec") #f))
+               (symbol=? (syntax->datum #'cont-start) (syntax->datum #'lambda))
+               (symbol=? (syntax->datum #'cont-start) (syntax->datum #'nvar))
+               (if #,recursion? (symbol=? (syntax->datum #'cont-start) (syntax->datum #'rec)) #f))
               (not (string-prefix? (symbol->string (syntax->datum #'val-start)) "p-"))
-              (not (string=? (symbol->string (syntax->datum #'val-start)) "lambda"))
-              (not (string=? (symbol->string (syntax->datum #'val-start)) "cmd"))
+              (not (symbol=? (syntax->datum #'val-start) (syntax->datum #'lambda)))
+              (prefab-struct-key (syntax->datum #'val-type))
               (symbol=? (prefab-struct-key (syntax->datum #'cont-type))
                         (prefab-struct-key (syntax->datum #'val-type))))
              (let* ([cont #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
@@ -405,7 +404,8 @@
            [pcons (map (λ (s) (datum->syntax #f (string->symbol (string-append "p-" (symbol->string (syntax->datum s))))))
                        (syntax->list #'(con ... ...)))])
        #`(begin
-           (provide #%module-begin #%app lambda cmd var p-var con ... ... #,@pcons)
+           (provide #%module-begin #%app lambda cmd var nvar p-var con ... ... #,@pcons)
+           #,(when recursion? #'(provide rec))
            #,(if recursion?
                  (recursive-dependencies slist)
                  (linear-dependencies slist)) ; disables recursive types

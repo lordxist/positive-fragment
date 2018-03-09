@@ -10,8 +10,9 @@
                                           (lambda mu)
                                           (cmd cmdn)
                                           (var varn)
+                                          (nvar nvarn)
                                           (p-var p-varn)))
-                      (provide mu cmdn varn p-varn))])
+                      (provide mu cmdn varn nvarn p-varn))])
     (syntax-case stx ()
       [(module-begin (data #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
                      (codata #s(recursive) (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...))
@@ -19,7 +20,9 @@
           #,(data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))
           (module cd "../positive.rkt"
             #,(data-helper #t #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...)))
-          #,renaming)]
+          #,renaming
+          (require (rename-in 'cd (rec recn)))
+          (provide recn))]
       [(module-begin (data (name ((con (type ...) (cnt-type ...)) ...)) ...)
                      (codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...))
        #`(#%module-begin
@@ -40,4 +43,6 @@
           #,(data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))
           (module cd "../positive.rkt"
             #,(data-helper #t #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...)) ...)) ...)))
-          #,renaming)])))
+          #,renaming
+          (require (rename-in 'cd (rec recn)))
+          (provide recn))])))
