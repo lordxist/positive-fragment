@@ -369,8 +369,8 @@
 
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
-          (syntax-case stx ()
-            [(_ elem ...) #'(i-cmd () elem ...)]))))
+          (syntax-case stx (i-cmd)
+            [(_ elem ...) #`(i-cmd () elem ...)]))))
 
 (define-for-syntax (i-command-def recursion? profile)
   #`(...(define-syntax (i-cmd stx)
@@ -491,7 +491,7 @@
                    #'unbound
                    (list-ref recs (syntax->datum #'n))))]))))
 
-(define-for-syntax (data-helper recursion? profile stx [shifts #f])
+(define-for-syntax (data-helper recursion? profile provide-internals stx [shifts #f])
   (syntax-case stx ()
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
      (data-helper recursion? profile #'(data (name ((con (type ...) (cnt-type ...) ()) ...)) ...) #f)]
@@ -504,6 +504,7 @@
        #`(begin
            (provide #%module-begin #%app lambda cmd var nvar p-var con ... ... #,@pcons)
            #,(when recursion? #'(provide rec))
+           #,(when provide-internals #'(provide i-cmd))
            #,(if recursion?
                  (recursive-dependencies slist)
                  (linear-dependencies slist)) ; disables recursive types
@@ -524,6 +525,6 @@
 (define-syntax (data stx)
   (syntax-case stx ()
     [(data #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
+     (data-helper #t #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]))
+     (data-helper #f #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]))
