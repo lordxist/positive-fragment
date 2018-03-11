@@ -157,7 +157,7 @@
 
 (define-for-syntax continuation-def
   #`(...(define-syntax (lambda stx)
-          (syntax-case stx ()
+          (syntax-case stx (i-lambda)
             [(_ type elem ...) #'(i-lambda type () elem ...)]))))
 
 (define-for-syntax (i-continuation-def types recursion?)
@@ -374,26 +374,49 @@
 
 (define-for-syntax (i-command-def recursion? profile)
   #`(...(define-syntax (i-cmd stx)
-          (syntax-case stx (lambda nvar cmd rec)
+          (syntax-case stx ()
             [(_
               (bound-var ...)
               (cont-start cont-type cont-element ...)
               (val-start val-type val-element ...))
              (and
               (or
-               (symbol=? (syntax->datum #'cont-start) (syntax->datum #'lambda))
-               (symbol=? (syntax->datum #'cont-start) (syntax->datum #'nvar))
-               (if #,recursion? (symbol=? (syntax->datum #'cont-start) (syntax->datum #'rec)) #f))
+               (syntax-case #'cont-start (lambda nvar)
+                 [lambda #t]
+                 [nvar #t]
+                 [other #f])
+               #,(if recursion?
+                     #'(syntax-case #'cont-start (rec)
+                         [rec #t]
+                         [other #f])
+                     #'#f))
               (not (string-prefix? (symbol->string (syntax->datum #'val-start)) "p-"))
-              (not (symbol=? (syntax->datum #'val-start) (syntax->datum #'lambda)))
+              (syntax-case #'val-start (lambda)
+                [lambda #f]
+                [other #t])
               (prefab-struct-key (syntax->datum #'val-type))
               (symbol=? (prefab-struct-key (syntax->datum #'cont-type))
                         (prefab-struct-key (syntax->datum #'val-type))))
-             (let* ([cont #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'cont-start)))))
+             (let* ([cont #`(#,(datum->syntax
+                                stx
+                                (string->symbol
+                                 (string-append
+                                  "i-"
+                                  (syntax-case #'cont-start (lambda nvar)
+                                    [lambda "lambda"]
+                                    [nvar "nvar"]))))
                              cont-type
                              (bound-var ...)
                              cont-element ...)]
-                    [val #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'val-start)))))
+                    [val #`(#,(datum->syntax
+                               stx
+                               (string->symbol
+                                (string-append
+                                 "i-"
+                                 (syntax-case #'val-start (var)
+                                   [var "var"]
+                                   [nvar "nvar"]
+                                   [other (symbol->string (syntax->datum #'val-start))]))))
                             val-type
                             (bound-var ...)
                             val-element ...)]
@@ -491,7 +514,7 @@
                    #'unbound
                    (list-ref recs (syntax->datum #'n))))]))))
 
-(define-for-syntax (data-helper recursion? profile provide-internals stx [shifts #f])
+(define-for-syntax (data-helper recursion? profile stx [shifts #f])
   (syntax-case stx ()
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
      (data-helper recursion? profile #'(data (name ((con (type ...) (cnt-type ...) ()) ...)) ...) #f)]
@@ -504,7 +527,6 @@
        #`(begin
            (provide #%module-begin #%app lambda cmd var nvar p-var con ... ... #,@pcons)
            #,(when recursion? #'(provide rec))
-           #,(when provide-internals #'(provide i-cmd))
            #,(if recursion?
                  (recursive-dependencies slist)
                  (linear-dependencies slist)) ; disables recursive types
@@ -525,6 +547,6 @@
 (define-syntax (data stx)
   (syntax-case stx ()
     [(data #s(recursive) (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #t #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
+     (data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]
     [(data (name ((con (type ...) (cnt-type ...)) ...)) ...)
-     (data-helper #f #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]))
+     (data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...)) ...)) ...))]))
