@@ -81,16 +81,21 @@
                    stx)
                   #,(if prefix
                         #`
-                        (syntax-case stx (lambda var)
+                        (syntax-case stx ()
                           [(_ #,(make-prefab-struct (syntax->datum #'tname))
                               (#,@args) (#,@cargs) #,@(if disable-subshifts empty (list #`(#,@shargs))))
                            (and
                             (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) (string-append #,prefix "-")))
                                     (syntax->list #'(#,@argheads)))
                             (andmap (λ (s)
-                                      (let ([name (symbol->string (syntax->datum s))])
-                                        (or (string=? (symbol->string (syntax->datum #'lambda)) name)
-                                            (string=? (string-append #,prefix "-" (symbol->string (syntax->datum #'var))) name))))
+                                      (syntax-case s (lambda)
+                                        [lambda #t]
+                                        [other (if #,(string=? prefix "p")
+                                                   (syntax-case s (p-var)
+                                                     [p-var #t]
+                                                     [other #f])
+                                                   (string=? (string-append #,prefix "-var")
+                                                             (symbol->string (syntax->datum s))))]))
                                     (syntax->list #'(#,@cargheads)))
                             (andmap (λ (s)
                                       (let ([name (symbol->string (syntax->datum s))])
@@ -111,9 +116,11 @@
                                             (not (string-contains? (symbol->string (syntax->datum s)) "-"))
                                             (not (symbol=? (syntax->datum #'lambda) (syntax->datum s)))))
                                     (syntax->list #'(#,@argheads)))
-                            (andmap (λ (s) (let ([name (symbol->string (syntax->datum s))])
-                                             (or (string=? (symbol->string (syntax->datum #'lambda)) name)
-                                                 (string=? (symbol->string (syntax->datum #'var)) name))))
+                            (andmap (λ (s)
+                                      (syntax-case s (lambda var)
+                                        [lambda #t]
+                                        [var #t]
+                                        [other #f]))
                                     (syntax->list #'(#,@cargheads)))
                             (andmap (λ (s) (let ([name (symbol->string (syntax->datum s))])
                                              (or (string=? #,(shifts-opposite-lambda shiftinfo) name)
