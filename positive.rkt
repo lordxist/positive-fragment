@@ -189,29 +189,26 @@
                   [prev-bound-sh (λ (t) (prev-bound (string->symbol (string-append "sh-" (symbol->string t)))))]
                   [new-bound
                    (λ (t p)
-                     (syntax-case p ()
-                       [(p-start p-type () () ())
-                        (and (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
-                             (symbol=? (syntax->datum #'p-start) 'p-var))
+                     (syntax-case p (p-var)
+                       [(p-var p-type () () ())
+                        (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
                         1]
                        [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry new-bound) t) (syntax->list #'pl))))]))]
                   [new-bound-neg-helper
                    (λ (top-level?)
                      (λ (t p)
-                       (syntax-case p ()
-                         [(p-start p-type () () ())
-                          (and (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
-                               (symbol=? (syntax->datum #'p-start) 'p-var))
+                       (syntax-case p (p-var)
+                         [(p-var p-type () () ())
+                          (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
                           (if top-level? 0 1)]
                          [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry (new-bound-neg-helper #f)) t) (syntax->list #'nl))))])))]
                   [new-bound-neg (new-bound-neg-helper #t)]
                   [new-bound-sh-helper
                    (λ (top-level?)
                      (λ (t p)
-                       (syntax-case p ()
-                         [(p-start p-type () () ())
-                          (and (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
-                               (symbol=? (syntax->datum #'p-start) 'p-var))
+                       (syntax-case p (p-var)
+                         [(p-var p-type () () ())
+                          (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
                           (if top-level? 0 1)]
                          [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry (new-bound-sh-helper #f)) t) (syntax->list #'sl))))])))]
                   [new-bound-sh (new-bound-sh-helper #t)]
@@ -240,9 +237,8 @@
                    (λ (p)
                      (sort
                       (remove-duplicates
-                       (syntax-case p ()
-                         [(p-start p-type () () ())
-                          (symbol=? (syntax->datum #'p-start) 'p-var)
+                       (syntax-case p (p-var)
+                         [(p-var p-type () () ())
                           (list (prefab-struct-key (syntax->datum #'p-type)))]
                          [(p-start p-type pl nl sl)
                           (append-map bound-var-types (syntax->list #'pl))]))
@@ -252,9 +248,8 @@
                      (λ (p)
                        (sort
                         (remove-duplicates
-                         (syntax-case p ()
-                           [(p-start p-type () () ())
-                            (symbol=? (syntax->datum #'p-start) 'p-var)
+                         (syntax-case p (p-var)
+                           [(p-var p-type () () ())
                             (if top-level? empty (list (prefab-struct-key (syntax->datum #'p-type))))]
                            [(p-start p-type pl nl sl)
                             (append-map (bound-var-types-neg-helper #f) (syntax->list #'nl))]))
@@ -265,12 +260,11 @@
                      (λ (p)
                        (sort
                         (remove-duplicates
-                         (syntax-case p ()
-                           [(p-start p-type () () ())
-                            (symbol=? (syntax->datum #'p-start) 'p-var)
+                         (syntax-case p (p-var)
+                           [(p-var p-type () () ())
                             (if top-level? empty (list (prefab-struct-key (syntax->datum #'p-type))))]
                            [(p-start p-type pl nl sl)
-                            (append-map (bound-var-types-sh-helper #f) (syntax->list #'nl))]))
+                            (append-map (bound-var-types-sh-helper #f) (syntax->list #'sl))]))
                         symbol<?)))]
                   [bound-var-types-sh (bound-var-types-sh-helper #t)]
                   [prev-recs
@@ -312,9 +306,8 @@
                              (hash-set! match-vars global-p empty)
                              (hash-set! match-vars-neg global-p empty)
                              (hash-set! match-vars-sh global-p empty)))
-                         (syntax-case p ()
-                           [(p-start p-type () () ())
-                            (symbol=? 'p-var (syntax->datum #'p-start))
+                         (syntax-case p (p-var)
+                           [(p-var p-type () () ())
                             (begin
                               (hash-update! (cond [(symbol=? 'sh mode) nvar-sh]
                                                   [(symbol=? 'neg mode) nvar-neg]
@@ -334,9 +327,9 @@
                                                                                                                          [(symbol=? 'neg mode) nvar-neg]
                                                                                                                          [else nvar])
                                                                                                                    global-p)))))))
-                              (first (hash-ref (cond [(symbol=? 'sh mode) nvar-sh]
-                                                     [(symbol=? 'neg mode) nvar-neg]
-                                                     [else nvar])
+                              (first (hash-ref (cond [(symbol=? 'sh mode) match-vars-sh]
+                                                     [(symbol=? 'neg mode) match-vars-neg]
+                                                     [else match-vars])
                                                global-p)))]
                            [(p-start p-type (p-element1 ...) (p-element2 ...) (p-element3 ...))
                             (let ([structify-result1 (map ((curry (structify-helper 'normal)) global-p) (syntax->list #'(p-element1 ...)))]
