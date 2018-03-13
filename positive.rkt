@@ -139,7 +139,9 @@
                              #`(list #,(make-prefab-struct (syntax->datum #'con))
                                      (list #,@(i-args (syntax->list #'(#,@args))))
                                      (list #,@(i-args (syntax->list #'(#,@cargs))))
-                                     (list #,@(if #,disable-subshifts empty (i-args (syntax->list #'(#,@shargs)))))))]))))))])
+                                     (list #,@(if #,disable-subshifts empty
+                                                  (syntax->list #'(#,@shargs))
+                                                  ))))]))))))])
       (syntax-case x ()
         [(con tname (type ...) (cnt-type ...))
          (constructor-def-for-type #'(con tname (type ...) (cnt-type ...) ()) prefix (shifts "" "") #t)])))
