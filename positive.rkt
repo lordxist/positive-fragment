@@ -413,7 +413,7 @@
                                (string->symbol
                                 (string-append
                                  "i-"
-                                 (syntax-case #'val-start (var)
+                                 (syntax-case #'val-start (var nvar)
                                    [var "var"]
                                    [nvar "nvar"]
                                    [other (symbol->string (syntax->datum #'val-start))]))))

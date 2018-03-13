@@ -25,6 +25,6 @@
 
 (mu #s(nat-fun) (((p-apply #s(nat-fun) ((p-varn #s(shift-nat) () () ())) ((p-varn #s(shift-nat) () () ())) ())
                   (cmdn
-                   (mu #s(shift-nat) ((cmdn daemon #s(ignore) ())))
-                   (nvarn #s(shift-nat) 0 () ())))
+                   (nvarn #s(shift-nat) 0 () ())
+                   (shift-nat #s(shift-nat) () () ((lambda #s(nat) ((cmd daemon #s(ignore) ())))))))
                  (cmdn daemon #s(impossible) ())))
