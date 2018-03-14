@@ -73,7 +73,7 @@
                          (syntax-case stx ()
                            [(_ type2 elem ...)
                             #'(#,(string->symbol (string-append "i-" (symbol->string (syntax->datum #'con))))
-                               type2 () elem ...)]))))
+                               type2 () () elem ...)]))))
                 (define-syntax
                   (#,(if prefix
                          (datum->syntax #f (string->symbol (string-append prefix "-" (symbol->string (syntax->datum #'con)))))
@@ -100,6 +100,7 @@
                             (andmap (λ (s)
                                       (let ([name (symbol->string (syntax->datum s))])
                                         (or (string=? #,(shifts-opposite-lambda shiftinfo) name)
+                                            (if #,(string=? prefix "p") (syntax-case s (p-var) [p-var #t] [other #f]) #f)
                                             (string=? (string-append #,prefix "-" #,(shifts-opposite-var shiftinfo)) name))))
                                     (syntax->list #'(#,@shargheads))))
                            #'`(#,@(map (λ (s) #`,#,s) args)
@@ -110,6 +111,7 @@
                         (syntax-case stx (lambda var)
                           [(_ #,(make-prefab-struct (syntax->datum #'tname))
                               #,#'(...(bound-var ...))
+                              #,#'(...(sh-bound-var ...))
                               (#,@args) (#,@cargs) #,@(if disable-subshifts empty (list #`(#,@shargs))))
                            (and
                             (andmap (λ (s) (and
@@ -130,17 +132,35 @@
                                   (λ (arglist)
                                     (map
                                      (λ (s)
-                                       (syntax-case s ()
+                                       (syntax-case s (i-lambda i-nvar i-var lambda nvar var)
+                                         #,#'(...
+                                              [(lambda type2 elem ...)
+                                               #'(i-lambda type2 (bound-var ...) (sh-bound-var ...) elem ...)])
+                                         #,#'(...
+                                              [(nvar type2 elem ...)
+                                               #'(i-nvar type2 (bound-var ...) (sh-bound-var ...) elem ...)])
+                                         #,#'(...
+                                              [(var type2 elem ...)
+                                               #'(i-var type2 (bound-var ...) (sh-bound-var ...) elem ...)])
                                          #,#'(...
                                               [(sub type2 elem ...)
                                                #`(#,(datum->syntax s (string->symbol (string-append "i-" (symbol->string (syntax->datum #'sub)))))
-                                                  type2 (bound-var ...) elem ...)])))
+                                                  type2 (bound-var ...) (sh-bound-var ...) elem ...)])))
+                                     arglist))]
+                                 [switchover-shifts
+                                  (λ (arglist)
+                                    (map
+                                     (λ (s)
+                                       (syntax-case s ()
+                                         #,#'(...
+                                              [(sub type2 elem ...)
+                                               #`(sub type2 (sh-bound-var ...) (bound-var ...) elem ...)])))
                                      arglist))])
                              #`(list #,(make-prefab-struct (syntax->datum #'con))
                                      (list #,@(i-args (syntax->list #'(#,@args))))
                                      (list #,@(i-args (syntax->list #'(#,@cargs))))
                                      (list #,@(if #,disable-subshifts empty
-                                                  (syntax->list #'(#,@shargs))
+                                                  (switchover-shifts (syntax->list #'(#,@shargs)))
                                                   ))))]))))))])
       (syntax-case x ()
         [(con tname (type ...) (cnt-type ...))
@@ -167,13 +187,15 @@
 (define-for-syntax continuation-def
   #`(...(define-syntax (lambda stx)
           (syntax-case stx (i-lambda)
-            [(_ type elem ...) #'(i-lambda type () elem ...)]))))
+            [(_ type (bound-var ...) (sh-bound-var ...) elem ...) #'(i-lambda type (bound-var ...) (sh-bound-var ...) elem ...)]
+            [(_ type elem ...) #'(i-lambda type () () elem ...)]))))
 
 (define-for-syntax (i-continuation-def types recursion?)
   #`(...(define-syntax (i-lambda stx)
           (syntax-case stx (cmd)
             [(_ type
                 (bound-var ...)
+                (sh-bound-var ...)
                 (((pattern-start pattern-type pattern-element ...) (cmd cmd-element ...)) ...
                  (cmd fall-through-cmd-element ...)))
              (and
@@ -184,18 +206,22 @@
                                        (prefab-struct-key (syntax->datum s))))
                       (syntax->list #'(pattern-type ...))))
              (letrec
-                 ([prev-bound
-                   (λ (t)
-                     (let ([prev-bound-vars-t
-                            (filter (λ (s) (symbol=?
-                                            t
-                                            (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
-                                    (syntax->list #'(bound-var ...)))])
-                       (if (empty? prev-bound-vars-t)
-                           -1
-                           (string->number (last (string-split (symbol->string (syntax->datum (last prev-bound-vars-t))) "-"))))))]
+                 ([prev-bound-helper
+                   (λ (shifted?)
+                     (λ (t)
+                       (let ([prev-bound-vars-t
+                              (filter (λ (s) (symbol=?
+                                              t
+                                              (string->symbol (string-join (reverse (rest (reverse (string-split (symbol->string (syntax->datum s)) "-")))) "-"))))
+                                      (if shifted?
+                                          (syntax->list #'(sh-bound-var ...))
+                                          (syntax->list #'(bound-var ...))))])
+                         (if (empty? prev-bound-vars-t)
+                             -1
+                             (string->number (last (string-split (symbol->string (syntax->datum (last prev-bound-vars-t))) "-")))))))]
+                  [prev-bound (prev-bound-helper #f)]
                   [prev-bound-neg (λ (t) (prev-bound (string->symbol (string-append "neg-" (symbol->string t)))))]
-                  [prev-bound-sh (λ (t) (prev-bound (string->symbol (string-append "sh-" (symbol->string t)))))]
+                  [prev-bound-sh (λ (t) ((prev-bound-helper #t) (string->symbol (string-append "neg-" (symbol->string t)))))]
                   [new-bound
                    (λ (t p)
                      (syntax-case p (p-var)
@@ -210,7 +236,8 @@
                          [(p-var p-type () () ())
                           (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
                           (if top-level? 0 1)]
-                         [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry (new-bound-neg-helper #f)) t) (syntax->list #'nl))))])))]
+                         [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry (new-bound-neg-helper #f)) t) (syntax->list #'nl)))
+                                                       (foldl + 0 (map ((curry (new-bound-neg-helper #t)) t) (syntax->list #'pl))))])))]
                   [new-bound-neg (new-bound-neg-helper #t)]
                   [new-bound-sh-helper
                    (λ (top-level?)
@@ -219,7 +246,8 @@
                          [(p-var p-type () () ())
                           (symbol=? t (prefab-struct-key (syntax->datum #'p-type)))
                           (if top-level? 0 1)]
-                         [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry (new-bound-sh-helper #f)) t) (syntax->list #'sl))))])))]
+                         [(p-start p-type pl nl sl) (+ (foldl + 0 (map ((curry (new-bound-sh-helper #f)) t) (syntax->list #'sl)))
+                                                       (foldl + 0 (map ((curry (new-bound-sh-helper #t)) t) (syntax->list #'pl))))])))]
                   [new-bound-sh (new-bound-sh-helper #t)]
                   [all-bound
                    (λ (t p)
@@ -240,7 +268,7 @@
                           (range (+ (prev-bound-neg t) 1) (+ (all-bound-neg t p) 1))))]
                   [new-bound-vars-sh
                    (λ (p c t)
-                     (map (λ (n) (datum->syntax c (string->symbol (string-append "sh-" (symbol->string t) "-" (number->string n)))))
+                     (map (λ (n) (datum->syntax c (string->symbol (string-append "neg-" (symbol->string t) "-" (number->string n)))))
                           (range (+ (prev-bound-sh t) 1) (+ (all-bound-sh t p) 1))))]
                   [bound-var-types
                    (λ (p)
@@ -261,7 +289,8 @@
                            [(p-var p-type () () ())
                             (if top-level? empty (list (prefab-struct-key (syntax->datum #'p-type))))]
                            [(p-start p-type pl nl sl)
-                            (append-map (bound-var-types-neg-helper #f) (syntax->list #'nl))]))
+                            (append (append-map (bound-var-types-neg-helper #f) (syntax->list #'nl))
+                                    (append-map (bound-var-types-neg-helper #t) (syntax->list #'pl)))]))
                         symbol<?)))]
                   [bound-var-types-neg (bound-var-types-neg-helper #t)]
                   [bound-var-types-sh-helper
@@ -273,7 +302,8 @@
                            [(p-var p-type () () ())
                             (if top-level? empty (list (prefab-struct-key (syntax->datum #'p-type))))]
                            [(p-start p-type pl nl sl)
-                            (append-map (bound-var-types-sh-helper #f) (syntax->list #'sl))]))
+                            (append (append-map (bound-var-types-sh-helper #f) (syntax->list #'sl))
+                                    (append-map (bound-var-types-sh-helper #t) (syntax->list #'pl)))]))
                         symbol<?)))]
                   [bound-var-types-sh (bound-var-types-sh-helper #t)]
                   [prev-recs
@@ -286,8 +316,9 @@
                         (#,@(append (syntax->list #'(bound-var ...))
                                     (append-map (((curry new-bound-vars) p) c) (bound-var-types p))
                                     (append-map (((curry new-bound-vars-neg) p) c) (bound-var-types-neg p))
-                                    (append-map (((curry new-bound-vars-sh) p) c) (bound-var-types-sh p))
                                     (if #,recursion? (list current-rec) empty)))
+                        (#,@(append (syntax->list #'(sh-bound-var ...))
+                                    (append-map (((curry new-bound-vars-sh) p) c) (bound-var-types-sh p))))
                         #,@(syntax->list
                             (syntax-case c ()
                               [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))]
@@ -328,8 +359,9 @@
                                             global-p
                                             ((curry cons) (datum->syntax #'p-start (string->symbol
                                                                                     (string-append
-                                                                                     (cond [(symbol=? 'sh mode) "sh-"]
-                                                                                           [(symbol=? 'neg mode) "neg-"]
+                                                                                     (cond [(or (symbol=? 'neg mode)
+                                                                                                (symbol=? 'sh mode))
+                                                                                            "neg-"]
                                                                                            [else ""])
                                                                                      (symbol->string (prefab-struct-key (syntax->datum #'p-type)))
                                                                                      "-" (number->string (hash-ref (cond [(symbol=? 'sh mode) nvar-sh]
@@ -354,7 +386,9 @@
                    #`(match case
                        #,@(map (λ (p c) #`[#,(structify p p)
                                            (#,(binding-check p c)
-                                            #,@(append (reverse (hash-ref match-vars p)) (reverse (hash-ref match-vars-neg p))))])
+                                            #,@(append (reverse (hash-ref match-vars p))
+                                                       (reverse (hash-ref match-vars-neg p))
+                                                       (reverse (hash-ref match-vars-sh p))))])
                                (map
                                 (λ (s)
                                   (syntax-case s ()
@@ -372,13 +406,14 @@
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
           (syntax-case stx (i-cmd)
-            [(_ elem ...) #`(i-cmd () elem ...)]))))
+            [(_ elem ...) #`(i-cmd () () elem ...)]))))
 
 (define-for-syntax (i-command-def recursion? profile)
   #`(...(define-syntax (i-cmd stx)
           (syntax-case stx ()
             [(_
               (bound-var ...)
+              (sh-bound-var ...)
               (cont-start cont-type cont-element ...)
               (val-start val-type val-element ...))
              (and
@@ -409,6 +444,7 @@
                                     [nvar "nvar"]))))
                              cont-type
                              (bound-var ...)
+                             (sh-bound-var ...)
                              cont-element ...)]
                     [val #`(#,(datum->syntax
                                stx
@@ -421,6 +457,7 @@
                                    [other (symbol->string (syntax->datum #'val-start))]))))
                             val-type
                             (bound-var ...)
+                            (sh-bound-var ...)
                             val-element ...)]
                     [result #,(if recursion? #'#`(#,cont #,val #,cont) #'#`(#,cont #,val))])
                #,(if (and profile (profile-cont-in-cmd profile)) ; extension point for profiles
@@ -430,7 +467,7 @@
                            result
                            (raise-syntax-error #f #,(limitation-error-descr (profile-cont-in-cmd profile)) #'cont-start))
                      #'result))]
-            [(_ (bound-var ...) daemon name ((arg-start arg-type arg-element ...) ...))
+            [(_ (bound-var ...) (sh-bound-var ...) daemon name ((arg-start arg-type arg-element ...) ...))
              (and
               (prefab-struct-key (syntax->datum #'name))
               (andmap
@@ -443,11 +480,11 @@
                  ,(list
                    #,@(map (λ (s)
                              (syntax-case s ()
-                               [(arg-start2 arg-type2 (bound-var2 ...) arg-element2 ...)
+                               [(arg-start2 arg-type2 (bound-var2 ...) (sh-bound-var2 ...) arg-element2 ...)
                                 #`(#,(datum->syntax stx (string->symbol (string-append "i-" (symbol->string (syntax->datum #'arg-start2)))))
-                                   arg-type2 (bound-var2 ...) arg-element2 ...)]))
+                                   arg-type2 (bound-var2 ...) (sh-bound-var2 ...) arg-element2 ...)]))
                            (syntax->list
-                            #'((arg-start arg-type (bound-var ...) arg-element ...) ...)))))]))))
+                            #'((arg-start arg-type (bound-var ...) (sh-bound-var ...) arg-element ...) ...)))))]))))
 
 (define-for-syntax (variable-def shifts?)
   #`(define-syntax (var stx)
@@ -471,16 +508,19 @@
                    (list-ref vars-of-type (syntax->datum #'n))))]))))
 
 (define-for-syntax (nvariable-def shifts?)
-  #`(define-syntax (nvar stx)
-      (syntax-case stx ()
-        [(_ type n () #,@(if shifts? (list #'()) empty))
-         (number? (syntax->datum #'n))
-         #'(i-nvar type () n ())])))
+  #`(...(define-syntax (nvar stx)
+          (syntax-case stx ()
+            [(_ type n () #,@(if shifts? (list #'()) empty))
+             (number? (syntax->datum #'n))
+             #'(i-nvar type () () n () ())]
+            [(_ type (bound-var ...) (sh-bound-var ...) n () #,@(if shifts? (list #'()) empty))
+             (number? (syntax->datum #'n))
+             #'(i-nvar type () (bound-var ...) (sh-bound-var ...) n () #,@(if shifts? (list #'()) empty))]))))
 
 (define-for-syntax (i-nvariable-def shifts?)
   #`(...(define-syntax (i-nvar stx)
           (syntax-case stx ()
-            [(_ type (bound-var ...) n () #,@(if shifts? (list #'()) empty))
+            [(_ type (bound-var ...) (sh-bound-var ...) n () ())
              (number? (syntax->datum #'n))
              (let ([vars-of-type
                     (filter

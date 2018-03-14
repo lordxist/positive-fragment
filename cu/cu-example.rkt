@@ -14,10 +14,10 @@
  (bot ())
  
  (bot-fun
-  ([bot-fun (bot) (bot) ()]))
+  ([fun (bot) (bot) ()]))
 
  (shift-nat
-  ([shift-nat () () (nat)]))
+  ([shift () () (nat)]))
  
  (nat-fun
   ([apply (shift-nat) (shift-nat) ()]))
