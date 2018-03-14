@@ -190,15 +190,17 @@
             [(_ type (bound-var ...) (sh-bound-var ...) elem ...) #'(i-lambda type (bound-var ...) (sh-bound-var ...) elem ...)]
             [(_ type elem ...) #'(i-lambda type () () elem ...)]))))
 
-(define-for-syntax (i-continuation-def types recursion?)
+(define-for-syntax (i-continuation-def types recursion? shifts)
   #`(...(define-syntax (i-lambda stx)
-          (syntax-case stx (cmd)
+          (syntax-case stx ()
             [(_ type
                 (bound-var ...)
                 (sh-bound-var ...)
-                (((pattern-start pattern-type pattern-element ...) (cmd cmd-element ...)) ...
-                 (cmd fall-through-cmd-element ...)))
+                (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
+                 (fall-through-cmd-start fall-through-cmd-element ...)))
              (and
+              (andmap (λ (s) (syntax-case s (cmd) [cmd #t] [other #f]))
+                      (syntax->list #'(cmd-start ... ... fall-through-cmd-start)))
               (member (prefab-struct-key (syntax->datum #'type)) #,types)
               (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) "p-"))
                       (syntax->list #'(pattern-start ...)))
