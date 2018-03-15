@@ -199,8 +199,10 @@
                 (((pattern-start pattern-type pattern-element ...) (cmd-start cmd-element ...)) ...
                  (fall-through-cmd-start fall-through-cmd-element ...)))
              (and
-              (andmap (λ (s) (syntax-case s (cmd) [cmd #t] [other #f]))
-                      (syntax->list #'(cmd-start ... ... fall-through-cmd-start)))
+              (andmap (λ (s) (syntax-case s (cmd) [cmd #t] [other #,(if shifts
+                                                                        #`(symbol=? (syntax->datum #'other) '#,(string->symbol (shifts-opposite-cmd shifts)))
+                                                                        #'#f)]))
+                      (syntax->list #'(cmd-start ... fall-through-cmd-start)))
               (member (prefab-struct-key (syntax->datum #'type)) #,types)
               (andmap (λ (s) (string-prefix? (symbol->string (syntax->datum s)) "p-"))
                       (syntax->list #'(pattern-start ...)))
@@ -314,16 +316,21 @@
                                                                                 "-" (number->string (+ prev-recs 1)))))]
                   [updated-bounds
                    (λ (p c)
-                     #`(i-cmd
-                        (#,@(append (syntax->list #'(bound-var ...))
+                     (let ([bound-vars
+                            (append (syntax->list #'(bound-var ...))
                                     (append-map (((curry new-bound-vars) p) c) (bound-var-types p))
                                     (append-map (((curry new-bound-vars-neg) p) c) (bound-var-types-neg p))
-                                    (if #,recursion? (list current-rec) empty)))
-                        (#,@(append (syntax->list #'(sh-bound-var ...))
-                                    (append-map (((curry new-bound-vars-sh) p) c) (bound-var-types-sh p))))
-                        #,@(syntax->list
-                            (syntax-case c ()
-                              [(_ cmd-element2 ...) #'(cmd-element2 ...)]))))]
+                                    (if #,recursion? (list current-rec) empty))]
+                           [sh-bound-vars
+                            (append (syntax->list #'(sh-bound-var ...))
+                                    (append-map (((curry new-bound-vars-sh) p) c) (bound-var-types-sh p)))]
+                           [rest
+                            (syntax->list
+                             (syntax-case c ()
+                               [(_ cmd-element2 ...) #'(cmd-element2 ...)]))])
+                       (syntax-case c (cmd)
+                         [(cmd e ...) #`(i-cmd (#,@bound-vars) (#,@sh-bound-vars) #,@rest)]
+                         [(other e ...) #`(other (#,@sh-bound-vars) (#,@bound-vars) #,@rest)])))]
                   [binding-check
                    (λ (p c)
                      #`(λ (#,@(append (append-map (((curry new-bound-vars) p) c) (bound-var-types p))
@@ -383,7 +390,7 @@
                                  (list #,@structify-result1)
                                  (list #,@structify-result2)
                                  (list #,@structify-result3)))]))))]
-                  [structify (structify-helper #f)]
+                  [structify (structify-helper 'normal)]
                   [match-case
                    #`(match case
                        #,@(map (λ (p c) #`[#,(structify p p)
@@ -408,6 +415,7 @@
 (define-for-syntax command-def
   #`(...(define-syntax (cmd stx)
           (syntax-case stx (i-cmd)
+            [(_ type (bound-var ...) (sh-bound-var ...) elem ...) #'(i-cmd type (bound-var ...) (sh-bound-var ...) elem ...)]
             [(_ elem ...) #`(i-cmd () () elem ...)]))))
 
 (define-for-syntax (i-command-def recursion? profile)
@@ -498,7 +506,7 @@
 (define-for-syntax (i-variable-def shifts)
   #`(...(define-syntax (i-var stx)
           (syntax-case stx ()
-            [(_ type (bound-var ...) n () #,@(if shifts? (list #'()) empty))
+            [(_ type (bound-var ...) (sh-bound-var ...) n () #,@(if shifts? (list #'()) empty))
              (number? (syntax->datum #'n))
              (let ([vars-of-type
                     (filter
@@ -576,7 +584,7 @@
                  (linear-dependencies slist)) ; disables recursive types
            #,(constructor-defs slist #f shifts)
            #,continuation-def
-           #,(i-continuation-def #''(name ...) recursion?) ; internal representation
+           #,(i-continuation-def #''(name ...) recursion? shifts) ; internal representation
            #,command-def
            #,(i-command-def recursion? profile) ; internal representation
            #,(variable-def shifts)
