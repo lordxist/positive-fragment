@@ -449,9 +449,10 @@
                                 (string->symbol
                                  (string-append
                                   "i-"
-                                  (syntax-case #'cont-start (lambda nvar)
+                                  (syntax-case #'cont-start (lambda nvar rec)
                                     [lambda "lambda"]
-                                    [nvar "nvar"]))))
+                                    [nvar "nvar"]
+                                    [rec "rec"]))))
                              cont-type
                              (bound-var ...)
                              (sh-bound-var ...)
@@ -497,11 +498,14 @@
                             #'((arg-start arg-type (bound-var ...) (sh-bound-var ...) arg-element ...) ...)))))]))))
 
 (define-for-syntax (variable-def shifts?)
-  #`(define-syntax (var stx)
-      (syntax-case stx ()
-        [(_ type n () #,@(if shifts? (list #'()) empty))
-         (number? (syntax->datum #'n))
-         #'(i-var type () n ())])))
+  #`(...(define-syntax (var stx)
+          (syntax-case stx ()
+            [(_ type n () #,@(if shifts? (list #'()) empty))
+             (number? (syntax->datum #'n))
+             #'(i-var type () n ())]
+            [(_ type (bound-var ...) (sh-bound-var ...) n () #,@(if shifts? (list #'()) empty))
+             (number? (syntax->datum #'n))
+             #'(i-var type (bound-var ...) (sh-bound-var ...) n () #,@(if shifts? (list #'()) empty))]))))
 
 (define-for-syntax (i-variable-def shifts)
   #`(...(define-syntax (i-var stx)
@@ -525,7 +529,7 @@
              #'(i-nvar type () () n () ())]
             [(_ type (bound-var ...) (sh-bound-var ...) n () #,@(if shifts? (list #'()) empty))
              (number? (syntax->datum #'n))
-             #'(i-nvar type () (bound-var ...) (sh-bound-var ...) n () #,@(if shifts? (list #'()) empty))]))))
+             #'(i-nvar type (bound-var ...) (sh-bound-var ...) n () #,@(if shifts? (list #'()) empty))]))))
 
 (define-for-syntax (i-nvariable-def shifts?)
   #`(...(define-syntax (i-nvar stx)
@@ -555,7 +559,7 @@
 (define-for-syntax (i-rec-def shifts?)
   #`(...(define-syntax (i-rec stx)
           (syntax-case stx ()
-            [(_ type (bound-var ...) n () #,@(if shifts? (list #'()) empty))
+            [(_ type (bound-var ...) (sh-bound-vars ...) n () #,@(if shifts? (list #'()) empty))
              (number? (syntax->datum #'n))
              (let ([recs
                     (filter

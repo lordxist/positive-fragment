@@ -12,9 +12,10 @@
                                           (cmd cmdn)
                                           (var varn)
                                           (nvar nvarn)
-                                          (p-var p-varn))
+                                          (p-var p-varn)
+                                          (rec recn))
                                racket/provide)
-                      (provide mu cmdn varn nvarn p-varn
+                      (provide mu cmdn varn nvarn p-varn recn
                                (filtered-out
                                 (λ (name)
                                   (and (not (or (string=? "lambda" name)
@@ -29,32 +30,32 @@
       [(module-begin (data #s(recursive) (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...)
                      (codata #s(recursive) (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...))
        #`(#%module-begin
-          #,(data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...) (shifts "mu" "varn" "cmdn"))
+          #,(data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...) (shifts "mu" "nvarn" "cmdn"))
           (module cd "../positive.rkt"
-            #,(data-helper #t #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...) (shifts "lambda" "var" "cmd")))
+            #,(data-helper #t #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...) (shifts "lambda" "nvar" "cmd")))
           #,renaming
           (require (rename-in 'cd (rec recn)))
           (provide recn))]
       [(module-begin (data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...)
                      (codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...))
        #`(#%module-begin
-          #,(data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...) (shifts "mu" "varn" "cmdn"))
+          #,(data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...) (shifts "mu" "nvarn" "cmdn"))
           (module cd "../positive.rkt"
-            #,(data-helper #f #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...) (shifts "lambda" "var" "cmd")))
+            #,(data-helper #f #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...) (shifts "lambda" "nvar" "cmd")))
           #,renaming)]
       [(module-begin (data #s(recursive) (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...)
                      (codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...))
        #`(#%module-begin
-          #,(data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...) (shifts "mu" "varn" "cmdn"))
+          #,(data-helper #t #f #'(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...) (shifts "mu" "nvarn" "cmdn"))
           (module cd "../positive.rkt"
-            #,(data-helper #f #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...) (shifts "lambda" "var" "cmd")))
+            #,(data-helper #f #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...) (shifts "lambda" "nvar" "cmd")))
           #,renaming)]
       [(module-begin (data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...)
                      (codata #s(recursive) (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...))
        #`(#%module-begin
-          #,(data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...) (shifts "mu" "varn" "cmdn"))
+          #,(data-helper #f #f #'(data (name ((con (type ...) (cnt-type ...) (shifted-type ...)) ...)) ...) (shifts "mu" "nvarn" "cmdn"))
           (module cd "../positive.rkt"
-            #,(data-helper #t #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...) (shifts "lambda" "var" "cmd")))
+            #,(data-helper #t #f #'(codata (nname ((ncon (ntype ...) (ncnt-type ...) (nshifted-type ...)) ...)) ...) (shifts "lambda" "nvar" "cmd")))
           #,renaming
           (require (rename-in 'cd (rec recn)))
           (provide recn))])))
