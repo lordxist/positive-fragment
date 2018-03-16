@@ -3,12 +3,13 @@
 (require (except-in "../positive.rkt" #%module-begin)
          (for-syntax "../lib/structs.rkt" racket/runtime-path))
 
-(provide (rename-out (module-begin #%module-begin)))
+(provide (rename-out (module-begin #%module-begin))
+         (for-syntax module-begin-helper))
 
-(define-syntax (module-begin stx)
 (begin-for-syntax
   (define-runtime-path path-to-positive "../positive.rkt"))
 
+(define-for-syntax (module-begin-helper stx)
   (let ([renaming #'(begin
                       (require (rename-in 'cd
                                           (lambda mu)
@@ -62,3 +63,6 @@
           #,renaming
           (require (rename-in 'cd (rec recn)))
           (provide recn))])))
+
+(define-syntax (module-begin stx)
+  (module-begin-helper stx))
