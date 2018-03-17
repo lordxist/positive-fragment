@@ -16,7 +16,9 @@
         (syntax->datum
          #`(mu
             #,shifted-pair-type
-            (((p-varn #,shifted-pair-type () () ())
+            (((#,(datum->syntax #f (string->symbol (string-append "p-shiftpair" (unshift-type #'arg1-type) (unshift-type #'arg2-type))))
+               #,shifted-pair-type () ()
+               ((p-varn #,(make-prefab-struct (string->symbol (string-append "pair-" (unshift-type #'arg1-type) "-" (unshift-type #'arg2-type)))) () () ())))
               (cmdn
                (arg1-head arg1-type arg1-elem ...)
                (#,(datum->syntax #f (string->symbol (string-append "shift" (string-replace (unshift-type #'arg1-type) "-" ""))))
