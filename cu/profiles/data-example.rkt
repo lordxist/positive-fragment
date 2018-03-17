@@ -1,4 +1,4 @@
-#lang s-exp "data.rkt"
+#lang s-exp "../cu.rkt"
 
 (data
  #s(recursive)
