@@ -3,7 +3,31 @@
 (require (for-syntax racket/list
                      racket/string))
 
-(provide primitive-pair)
+(provide primitive-apply primitive-pair)
+
+(define-syntax (primitive-apply stx)
+  (syntax-case stx ()
+    [(p (cont-head cont-type cont-elem ...) (arg-head arg-type arg-elem ...))
+     (let* ([in-type (symbol->string (prefab-struct-key (syntax->datum #'arg-type)))]
+            [out-type (last (string-split (symbol->string (prefab-struct-key (syntax->datum #'cont-type))) "-to-"))])
+       (datum->syntax
+        #'p
+        (syntax->datum
+         #`(mu
+            #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
+            (((#,(datum->syntax #f (string->symbol
+                                    (string-append "p-"
+                                                   (string-replace (string-append "shift" out-type) "-" ""))))
+               #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
+               () ()
+               ((p-varn #,(make-prefab-struct (string->symbol out-type)) () () ())))
+              (cmd (cont-head cont-type cont-elem ...)
+                   (#,(datum->syntax #f (string->symbol (string-replace (string-append in-type "to" out-type) "-" "")))
+                    #,(make-prefab-struct (string->symbol (string-append in-type "-to-" out-type)))
+                    ((arg-head arg-type arg-elem ...))
+                    ((nvar #,(make-prefab-struct (string->symbol out-type)) 0 () ()))
+                    ())))
+             (cmdn daemon #s(impossible) ()))))))]))
 
 ; from "On the unity of duality", p.25
 (define-syntax (primitive-pair stx)

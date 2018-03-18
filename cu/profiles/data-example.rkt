@@ -9,6 +9,9 @@
 
  (pair-nat-nat
   ([pairnatnat (nat nat) () ()]))
+
+ (nat-to-nat
+  ([nattonat (nat) (nat) ()]))
  )
 
 (codata
