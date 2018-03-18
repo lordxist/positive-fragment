@@ -119,9 +119,9 @@
                                             (not (symbol=? (syntax->datum #'lambda) (syntax->datum s)))))
                                     (syntax->list #'(#,@argheads)))
                             (andmap (λ (s)
-                                      (syntax-case s (lambda var)
+                                      (syntax-case s (lambda nvar)
                                         [lambda #t]
-                                        [var #t]
+                                        [nvar #t]
                                         [other #f]))
                                     (syntax->list #'(#,@cargheads)))
                             (andmap (λ (s) (let ([name (symbol->string (syntax->datum s))])
