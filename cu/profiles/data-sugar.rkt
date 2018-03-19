@@ -8,7 +8,7 @@
 (define-syntax (primitive-apply stx)
   (syntax-case stx ()
     [(p (cont-head cont-type cont-elem ...) (arg-head arg-type arg-elem ...))
-     (let* ([in-type (symbol->string (prefab-struct-key (syntax->datum #'arg-type)))]
+     (let* ([in-type (string-join (rest (string-split (symbol->string (prefab-struct-key (syntax->datum #'arg-type))) "-")) "-")]
             [out-type (last (string-split (symbol->string (prefab-struct-key (syntax->datum #'cont-type))) "-to-"))])
        (datum->syntax
         #'p
@@ -21,12 +21,20 @@
                #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
                () ()
                ((p-varn #,(make-prefab-struct (string->symbol out-type)) () () ())))
-              (cmd (cont-head cont-type cont-elem ...)
-                   (#,(datum->syntax #f (string->symbol (string-replace (string-append in-type "to" out-type) "-" "")))
-                    #,(make-prefab-struct (string->symbol (string-append in-type "-to-" out-type)))
-                    ((arg-head arg-type arg-elem ...))
-                    ((nvar #,(make-prefab-struct (string->symbol out-type)) 0 () ()))
-                    ())))
+
+              (cmdn (arg-head arg-type arg-elem ...)
+                    (#,(datum->syntax #f (string->symbol (string-replace (string-append "shift" in-type) "-" "")))
+                     #,(make-prefab-struct (string->symbol (string-append "shift-" in-type)))
+                     () ()
+                     ((lambda #,(make-prefab-struct (string->symbol in-type))
+                        (((p-var #,(make-prefab-struct (string->symbol in-type)) () () ())
+                          (cmd (cont-head cont-type cont-elem ...)
+                               (#,(datum->syntax #f (string->symbol (string-replace (string-append in-type "to" out-type) "-" "")))
+                                #,(make-prefab-struct (string->symbol (string-append in-type "-to-" out-type)))
+                                ((var #,(make-prefab-struct (string->symbol in-type)) 0 () ()))
+                                ((nvar #,(make-prefab-struct (string->symbol out-type)) 0 () ()))
+                                ())))
+                         (cmd daemon #s(impossible) ())))))))
              (cmdn daemon #s(impossible) ()))))))]))
 
 ; from "On the unity of duality", p.25
