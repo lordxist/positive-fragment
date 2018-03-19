@@ -59,7 +59,14 @@
                                (pattern)
                                ((p-var out-type () () ()))
                                ())
-                              (cmdn #,(primitive-const-expand #'case-expr)
+                              (cmdn #,(syntax-case #'case-expr ()
+                                        [(expr-head expr-elem ...)
+                                         (symbol=? 'primitive-const (syntax->datum #'expr-head))
+                                         (primitive-const-expand #'case-expr)]
+                                        [(expr-head expr-elem ...)
+                                         (symbol=? 'primitive-apply (syntax->datum #'expr-head))
+                                         (primitive-apply-expand #'case-expr)]
+                                        [_ #'case-expr])
                                     (#,(datum->syntax #f (string->symbol (string-replace shift-out-type "-" "")))
                                      #,(make-prefab-struct (string->symbol shift-out-type))
                                      () () ((nvar out-type 0 () ())))))]))
