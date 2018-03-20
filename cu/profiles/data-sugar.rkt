@@ -13,7 +13,14 @@
       #'p
       (syntax->datum
        #`(cmdn
-          #,(primitive-apply-expand #'expr)
+          #,(syntax-case #'expr ()
+              [(expr-head expr-elem ...)
+               (symbol=? 'primitive-const (syntax->datum #'expr-head))
+               (primitive-const-expand #'expr)]
+              [(expr-head expr-elem ...)
+               (symbol=? 'primitive-apply (syntax->datum #'expr-head))
+               (primitive-apply-expand #'expr)]
+              [_ #'case-expr])
           (#,(datum->syntax #f (string->symbol (string-append "shift" (string-replace (symbol->string (prefab-struct-key (syntax->datum #'type))) "-" ""))))
            #,(make-prefab-struct (string->symbol (string-append "shift-" (symbol->string (prefab-struct-key (syntax->datum #'type))))))
            () ()
