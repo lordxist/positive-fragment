@@ -4,7 +4,37 @@
                      racket/list
                      racket/string))
 
-(provide primitive-print primitive-const primitive-fun primitive-apply primitive-pair)
+(provide primitive-reccall primitive-print primitive-const primitive-fun primitive-apply primitive-pair)
+
+(define-for-syntax (primitive-reccall-expand stx)
+  (syntax-case stx ()
+    [(p in-type out-type index arg)
+     (datum->syntax
+      #'p
+      (syntax->datum
+       #`(mu #,(make-prefab-struct (string->symbol (string-append "shift-" (symbol->string (prefab-struct-key (syntax->datum #'out-type))))))
+             (((#,(datum->syntax #f (string->symbol (string-append "p-shift"
+                                                                   (string-replace (symbol->string (prefab-struct-key (syntax->datum #'out-type))) "-" ""))))
+                #,(make-prefab-struct (string->symbol (string-append "shift-" (symbol->string (prefab-struct-key (syntax->datum #'out-type))))))
+                () ()
+                ((p-varn out-type () () ())))
+               (cmd (rec #,(make-prefab-struct (string->symbol (string-append (symbol->string (prefab-struct-key (syntax->datum #'in-type))) "-to-"
+                                                                              (symbol->string (prefab-struct-key (syntax->datum #'out-type))))))
+                      index () ())
+                    (#,(datum->syntax #f (string->symbol (string-replace
+                                                          (string-append (symbol->string (prefab-struct-key (syntax->datum #'in-type))) "to"
+                                                                         (symbol->string (prefab-struct-key (syntax->datum #'out-type))))
+                                                          "-" "")))
+                     #,(make-prefab-struct (string->symbol (string-append (symbol->string (prefab-struct-key (syntax->datum #'in-type))) "-to-"
+                                                                          (symbol->string (prefab-struct-key (syntax->datum #'out-type))))))
+                     
+                     (arg)
+                     ((nvar out-type 0 () ()))
+                     ())))
+              (cmdn daemon #s(impossible) ())))))]))
+
+(define-syntax (primitive-reccall stx)
+  (primitive-reccall-expand stx))
 
 (define-syntax (primitive-print stx)
   (syntax-case stx ()
@@ -99,9 +129,11 @@
                #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
                () ()
                ((p-varn #,(make-prefab-struct (string->symbol out-type)) () () ())))
-              (cmdn #,(if (symbol=? (syntax->datum #'arg-head) 'primitive-const)
-                          (primitive-const-expand #'(arg-head arg-elem ...))
-                          #'(arg-head arg-elem ...))
+              (cmdn #,(cond [(symbol=? (syntax->datum #'arg-head) 'primitive-const)
+                             (primitive-const-expand #'(arg-head arg-elem ...))]
+                            [(symbol=? (syntax->datum #'arg-head) 'primitive-reccall)
+                             (primitive-reccall-expand #'(arg-head arg-elem ...))]
+                            [else #'(arg-head arg-elem ...)])
                     (#,(datum->syntax #f (string->symbol (string-replace (string-append "shift" in-type) "-" "")))
                      #,(make-prefab-struct (string->symbol (string-append "shift-" in-type)))
                      () ()

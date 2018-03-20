@@ -26,15 +26,9 @@
       (primitive-fun
        #s(nat) #s(nat)
        (((p-var #s(nat) () () ()) (primitive-const (succ #s(nat) ((var #s(nat) 0 () ())) () ())))))
-      ; the recursive call (TODO: write macro for encoding recursive calls)
-      (mu #s(shift-nat)
-          (((p-shiftnat #s(shift-nat) () () ((p-varn #s(nat) () () ())))
-            (cmd (rec #s(pair-nat-nat-to-nat) 0 () ())
-                 (pairnatnattonat #s(pair-nat-nat-to-nat)
-                                  ((pairnatnat #s(pair-nat-nat) ((var #s(nat) 0 () ()) (var #s(nat) 1 () ())) () ()))
-                                  ((nvar #s(nat) 0 () ()))
-                                  ())))
-           (cmdn daemon #s(impossible) ())))))))
+      (primitive-reccall #s(pair-nat-nat) #s(nat) 0
+                         (pairnatnat #s(pair-nat-nat) ((var #s(nat) 0 () ()) (var #s(nat) 1 () ())) () ()))
+      ))))
   (primitive-const (pairnatnat #s(pair-nat-nat)
                                ((succ #s(nat) ((succ #s(nat) ((zero #s(nat) () () ())) () ())) () ())
                                 (succ #s(nat) ((succ #s(nat) ((succ #s(nat) ((succ #s(nat) ((zero #s(nat) () () ())) () ())) () ())) () ())) () ()))
