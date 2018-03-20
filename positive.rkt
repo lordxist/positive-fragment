@@ -519,7 +519,7 @@
                      (syntax->list #'(bound-var ...)))])
                (if (> (syntax->datum #'n) (- (length vars-of-type) 1))
                    #'unbound
-                   (list-ref vars-of-type (syntax->datum #'n))))]))))
+                   (list-ref (reverse vars-of-type) (syntax->datum #'n))))]))))
 
 (define-for-syntax (nvariable-def shifts?)
   #`(...(define-syntax (nvar stx)
@@ -543,7 +543,7 @@
                      (syntax->list #'(bound-var ...)))])
                (if (> (syntax->datum #'n) (- (length vars-of-type) 1))
                    #'unbound
-                   (list-ref vars-of-type (syntax->datum #'n))))]))))
+                   (list-ref (reverse vars-of-type) (syntax->datum #'n))))]))))
 
 (define-for-syntax (p-variable-def shifts?)
   #`(define-syntax (p-var stx)
@@ -568,7 +568,7 @@
                      (syntax->list #'(bound-var ...)))])
                (if (> (syntax->datum #'n) (- (length recs) 1))
                    #'unbound
-                   (list-ref recs (syntax->datum #'n))))]))))
+                   (list-ref (reverse recs) (syntax->datum #'n))))]))))
 
 (define-for-syntax (data-helper recursion? profile stx [shifts #f])
   (syntax-case stx ()
