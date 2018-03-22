@@ -105,7 +105,7 @@
 
 (define-for-syntax (primitive-return-expand stx)
   (syntax-case stx ()
-    [(p out-type case-expr)
+    [(p cont-index out-type case-expr)
      (let ([shift-out-type
             (string-append "shift-" (symbol->string (prefab-struct-key (syntax->datum #'out-type))))])
        (datum->syntax
@@ -121,7 +121,7 @@
                      [_ #'case-expr])
                  (#,(datum->syntax #f (string->symbol (string-replace shift-out-type "-" "")))
                   #,(make-prefab-struct (string->symbol shift-out-type))
-                  () () ((nvar out-type 0 () ())))))))]))
+                  () () ((nvar out-type cont-index () ())))))))]))
 
 (define-syntax (primitive-return stx)
   (primitive-return-expand stx))
