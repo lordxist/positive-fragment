@@ -146,6 +146,8 @@
                              (primitive-const-expand #'(arg-head arg-elem ...))]
                             [(symbol=? (syntax->datum #'arg-head) 'primitive-reccall)
                              (primitive-reccall-expand #'(arg-head arg-elem ...))]
+                            [(symbol=? (syntax->datum #'arg-head) 'primitive-apply)
+                             (primitive-apply-expand #'(arg-head arg-elem ...))]
                             [else #'(arg-head arg-elem ...)])
                     (#,(datum->syntax #f (string->symbol (string-replace (string-append "shift" in-type) "-" "")))
                      #,(make-prefab-struct (string->symbol (string-append "shift-" in-type)))
