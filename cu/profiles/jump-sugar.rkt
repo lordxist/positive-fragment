@@ -4,7 +4,7 @@
                      racket/list
                      racket/string))
 
-(provide primitive-reccall primitive-print primitive-const primitive-fun primitive-return primitive-apply primitive-pair)
+(provide primitive-reccall primitive-print primitive-const primitive-fun primitive-throw primitive-return primitive-apply-callcc primitive-apply primitive-pair)
 
 (define-for-syntax (primitive-reccall-expand stx)
   (syntax-case stx ()
@@ -50,7 +50,10 @@
               [(expr-head expr-elem ...)
                (symbol=? 'primitive-apply (syntax->datum #'expr-head))
                (primitive-apply-expand #'expr)]
-              [_ #'case-expr])
+              [(expr-head expr-elem ...)
+               (symbol=? 'primitive-apply-callcc (syntax->datum #'expr-head))
+               (primitive-apply-callcc-expand #'expr)]
+              [_ #'expr])
           (#,(datum->syntax #f (string->symbol (string-append "shift" (string-replace (symbol->string (prefab-struct-key (syntax->datum #'type))) "-" ""))))
            #,(make-prefab-struct (string->symbol (string-append "shift-" (symbol->string (prefab-struct-key (syntax->datum #'type))))))
            () ()
@@ -96,16 +99,20 @@
                                (pattern)
                                ((p-var out-type () () ()))
                                ())
-                              #,(primitive-return-expand #'case-expr))]))
+                              #,(syntax-case #'case-expr ()
+                                  [(expr-head expr-elem ...)
+                                   (symbol=? 'primitive-throw (syntax->datum #'expr-head))
+                                   (primitive-throw-expand #'case-expr)]
+                                  [_ (primitive-return-expand #'case-expr)]))]))
                       (syntax->list #'((pattern case-expr) ...)))
               (cmd daemon #s(impossible) ()))))))]))
 
 (define-syntax (primitive-fun stx)
   (primitive-fun-expand stx))
 
-(define-for-syntax (primitive-return-expand stx)
+(define-for-syntax (primitive-throw-expand stx)
   (syntax-case stx ()
-    [(p cont-index out-type case-expr)
+    [(p index out-type case-expr)
      (let ([shift-out-type
             (string-append "shift-" (symbol->string (prefab-struct-key (syntax->datum #'out-type))))])
        (datum->syntax
@@ -119,15 +126,94 @@
                       (symbol=? 'primitive-apply (syntax->datum #'expr-head))
                       (primitive-apply-expand #'case-expr)]
                      [(expr-head expr-elem ...)
+                      (symbol=? (syntax->datum #'expr-head) 'primitive-apply-callcc)
+                      (primitive-apply-callcc-expand #'case-expr)]
+                     [(expr-head expr-elem ...)
+                      (symbol=? 'primitive-reccall (syntax->datum #'expr-head))
+                      (primitive-reccall-expand #'case-expr)]
+                     [_ #'case-expr])
+                 (varn #,(make-prefab-struct (string->symbol shift-out-type)) index () ())))))]))
+
+(define-syntax (primitive-throw stx)
+  (primitive-throw-expand stx))
+
+(define-for-syntax (primitive-return-expand stx)
+  (syntax-case stx ()
+    [(p out-type case-expr)
+     (let ([shift-out-type
+            (string-append "shift-" (symbol->string (prefab-struct-key (syntax->datum #'out-type))))])
+       (datum->syntax
+        #'p
+        (syntax->datum
+         #`(cmdn #,(syntax-case #'case-expr ()
+                     [(expr-head expr-elem ...)
+                      (symbol=? 'primitive-const (syntax->datum #'expr-head))
+                      (primitive-const-expand #'case-expr)]
+                     [(expr-head expr-elem ...)
+                      (symbol=? 'primitive-apply (syntax->datum #'expr-head))
+                      (primitive-apply-expand #'case-expr)]
+                     [(expr-head expr-elem ...)
+                      (symbol=? (syntax->datum #'expr-head) 'primitive-apply-callcc)
+                      (primitive-apply-callcc-expand #'case-expr)]
+                     [(expr-head expr-elem ...)
                       (symbol=? 'primitive-reccall (syntax->datum #'expr-head))
                       (primitive-reccall-expand #'case-expr)]
                      [_ #'case-expr])
                  (#,(datum->syntax #f (string->symbol (string-replace shift-out-type "-" "")))
                   #,(make-prefab-struct (string->symbol shift-out-type))
-                  () () ((nvar out-type cont-index () ())))))))]))
+                  () () ((nvar out-type 0 () ())))))))]))
 
 (define-syntax (primitive-return stx)
   (primitive-return-expand stx))
+
+(define-for-syntax (primitive-apply-callcc-expand stx)
+  (syntax-case stx ()
+    [(p (fun-head fun-in-type fun-out-type fun-elem ...) (arg-head arg-elem ...))
+     (let ([in-type (symbol->string (prefab-struct-key (syntax->datum #'fun-in-type)))]
+           [out-type (symbol->string (prefab-struct-key (syntax->datum #'fun-out-type)))])
+       (datum->syntax
+        #'p
+        (syntax->datum
+         #`(mu
+            #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
+            (((p-varn #,(make-prefab-struct (string->symbol (string-append "shift-" out-type))) () () ())
+              (cmdn
+               (mu
+                #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
+                (((#,(datum->syntax #f (string->symbol
+                                        (string-append "p-"
+                                                       (string-replace (string-append "shift" out-type) "-" ""))))
+                   #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
+                   () ()
+                   ((p-varn #,(make-prefab-struct (string->symbol out-type)) () () ())))
+                  (cmdn #,(cond [(symbol=? (syntax->datum #'arg-head) 'primitive-const)
+                                 (primitive-const-expand #'(arg-head arg-elem ...))]
+                                [(symbol=? (syntax->datum #'arg-head) 'primitive-reccall)
+                                 (primitive-reccall-expand #'(arg-head arg-elem ...))]
+                                [(symbol=? (syntax->datum #'arg-head) 'primitive-apply)
+                                 (primitive-apply-expand #'(arg-head arg-elem ...))]
+                                [(symbol=? (syntax->datum #'arg-head) 'primitive-apply-callcc)
+                                 (primitive-apply-callcc-expand #'(arg-head arg-elem ...))]
+                                [else #'(arg-head arg-elem ...)])
+                        (#,(datum->syntax #f (string->symbol (string-replace (string-append "shift" in-type) "-" "")))
+                         #,(make-prefab-struct (string->symbol (string-append "shift-" in-type)))
+                         () ()
+                         ((lambda #,(make-prefab-struct (string->symbol in-type))
+                            (((p-var #,(make-prefab-struct (string->symbol in-type)) () () ())
+                              (cmd #,(primitive-fun-expand #'(fun-head fun-in-type fun-out-type fun-elem ...))
+                                   (#,(datum->syntax #f (string->symbol (string-replace (string-append in-type "to" out-type) "-" "")))
+                                    #,(make-prefab-struct (string->symbol (string-append in-type "-to-" out-type)))
+                                    ((var #,(make-prefab-struct (string->symbol in-type)) 0 () ()))
+                                    ((nvar #,(make-prefab-struct (string->symbol out-type)) 0 () ()))
+                                    ())))
+                             (cmd daemon #s(impossible) ())))))))
+                 (cmdn daemon #s(impossible) ())))
+               (varn #,(make-prefab-struct (string->symbol (string-append "shift-" out-type))) 0 () ())))
+             (cmdn daemon #s(impossible) ())))
+         )))]))
+
+(define-syntax (primitive-apply-callcc stx)
+  (primitive-apply-callcc-expand stx))
 
 (define-for-syntax (primitive-apply-expand stx)
   (syntax-case stx ()
@@ -138,33 +224,42 @@
         #'p
         (syntax->datum
          #`(mu
-            #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
-            (((#,(datum->syntax #f (string->symbol
-                                    (string-append "p-"
-                                                   (string-replace (string-append "shift" out-type) "-" ""))))
-               #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
-               () ()
-               ((p-varn #,(make-prefab-struct (string->symbol out-type)) () () ())))
-              (cmdn #,(cond [(symbol=? (syntax->datum #'arg-head) 'primitive-const)
-                             (primitive-const-expand #'(arg-head arg-elem ...))]
-                            [(symbol=? (syntax->datum #'arg-head) 'primitive-reccall)
-                             (primitive-reccall-expand #'(arg-head arg-elem ...))]
-                            [(symbol=? (syntax->datum #'arg-head) 'primitive-apply)
-                             (primitive-apply-expand #'(arg-head arg-elem ...))]
-                            [else #'(arg-head arg-elem ...)])
-                    (#,(datum->syntax #f (string->symbol (string-replace (string-append "shift" in-type) "-" "")))
-                     #,(make-prefab-struct (string->symbol (string-append "shift-" in-type)))
-                     () ()
-                     ((lambda #,(make-prefab-struct (string->symbol in-type))
-                        (((p-var #,(make-prefab-struct (string->symbol in-type)) () () ())
-                          (cmd #,(primitive-fun-expand #'(fun-head fun-in-type fun-out-type fun-elem ...))
-                               (#,(datum->syntax #f (string->symbol (string-replace (string-append in-type "to" out-type) "-" "")))
-                                #,(make-prefab-struct (string->symbol (string-append in-type "-to-" out-type)))
-                                ((var #,(make-prefab-struct (string->symbol in-type)) 0 () ()))
-                                ((nvar #,(make-prefab-struct (string->symbol out-type)) 0 () ()))
-                                ())))
-                         (cmd daemon #s(impossible) ())))))))
-             (cmdn daemon #s(impossible) ()))))))]))
+            ;#,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
+            ;(((p-varn #,(make-prefab-struct (string->symbol (string-append "shift-" out-type))) () () ())
+            ;  (cmdn
+            ;   (mu
+                #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
+                (((#,(datum->syntax #f (string->symbol
+                                        (string-append "p-"
+                                                       (string-replace (string-append "shift" out-type) "-" ""))))
+                   #,(make-prefab-struct (string->symbol (string-append "shift-" out-type)))
+                   () ()
+                   ((p-varn #,(make-prefab-struct (string->symbol out-type)) () () ())))
+                  (cmdn #,(cond [(symbol=? (syntax->datum #'arg-head) 'primitive-const)
+                                 (primitive-const-expand #'(arg-head arg-elem ...))]
+                                [(symbol=? (syntax->datum #'arg-head) 'primitive-reccall)
+                                 (primitive-reccall-expand #'(arg-head arg-elem ...))]
+                                [(symbol=? (syntax->datum #'arg-head) 'primitive-apply)
+                                 (primitive-apply-expand #'(arg-head arg-elem ...))]
+                                [(symbol=? (syntax->datum #'arg-head) 'primitive-apply-callcc)
+                                 (primitive-apply-callcc-expand #'(arg-head arg-elem ...))]
+                                [else #'(arg-head arg-elem ...)])
+                        (#,(datum->syntax #f (string->symbol (string-replace (string-append "shift" in-type) "-" "")))
+                         #,(make-prefab-struct (string->symbol (string-append "shift-" in-type)))
+                         () ()
+                         ((lambda #,(make-prefab-struct (string->symbol in-type))
+                            (((p-var #,(make-prefab-struct (string->symbol in-type)) () () ())
+                              (cmd #,(primitive-fun-expand #'(fun-head fun-in-type fun-out-type fun-elem ...))
+                                   (#,(datum->syntax #f (string->symbol (string-replace (string-append in-type "to" out-type) "-" "")))
+                                    #,(make-prefab-struct (string->symbol (string-append in-type "-to-" out-type)))
+                                    ((var #,(make-prefab-struct (string->symbol in-type)) 0 () ()))
+                                    ((nvar #,(make-prefab-struct (string->symbol out-type)) 0 () ()))
+                                    ())))
+                             (cmd daemon #s(impossible) ())))))))
+                 (cmdn daemon #s(impossible) ())))
+             ;  (varn #,(make-prefab-struct (string->symbol (string-append "shift-" out-type))) 0 () ())))
+             ;(cmdn daemon #s(impossible) ())))
+         )))]))
 
 (define-syntax (primitive-apply stx)
   (primitive-apply-expand stx))
