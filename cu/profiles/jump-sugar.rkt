@@ -118,6 +118,9 @@
                      [(expr-head expr-elem ...)
                       (symbol=? 'primitive-apply (syntax->datum #'expr-head))
                       (primitive-apply-expand #'case-expr)]
+                     [(expr-head expr-elem ...)
+                      (symbol=? 'primitive-reccall (syntax->datum #'expr-head))
+                      (primitive-reccall-expand #'case-expr)]
                      [_ #'case-expr])
                  (#,(datum->syntax #f (string->symbol (string-replace shift-out-type "-" "")))
                   #,(make-prefab-struct (string->symbol shift-out-type))
