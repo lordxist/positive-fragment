@@ -57,6 +57,9 @@
  (shift-word
   ([shiftword () () (word)]))
 
+ (shift-maybe-word
+  ([shiftmaybeword () () (maybe-word)]))
+
  (shift-bool
   ([shiftbool () () (bool)]))
 

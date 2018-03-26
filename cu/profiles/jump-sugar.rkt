@@ -103,7 +103,11 @@
                                   [(expr-head expr-elem ...)
                                    (symbol=? 'primitive-throw (syntax->datum #'expr-head))
                                    (primitive-throw-expand #'case-expr)]
-                                  [_ (primitive-return-expand #'case-expr)]))]))
+                                  [(expr-head expr-elem ...)
+                                   (symbol=? 'primitive-return (syntax->datum #'expr-head))
+                                   (primitive-return-expand #'case-expr)]
+                                  [(expr-head expr-elem ...)
+                                   (raise-syntax-error #f (format "Wrong form: ~a" (syntax->datum #'expr-head)))]))]))
                       (syntax->list #'((pattern case-expr) ...)))
               (cmd daemon #s(impossible) ()))))))]))
 
